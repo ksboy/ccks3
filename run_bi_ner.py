@@ -804,18 +804,18 @@ def main():
         model.to(args.device)
         result, predictions, start_logits, end_logits = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
         # Save results
-        output_test_results_file = os.path.join(checkpoint, "test3_results.txt")
+        output_test_results_file = os.path.join(checkpoint, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
             for key in sorted(result.keys()):
                 writer.write("{} = {}\n".format(key, str(result[key])))
         # Save predictions
-        output_test_predictions_file = os.path.join(checkpoint, "test3_predictions.json")
+        output_test_predictions_file = os.path.join(checkpoint, "test_predictions.json")
         results = []
         for prediction in predictions:
             results.append({'labels':prediction})
         write_file(results,output_test_predictions_file) 
         # Save logits
-        output_test_logits_file = os.path.join(checkpoint, "test3_logits.json")
+        output_test_logits_file = os.path.join(checkpoint, "test_logits.json")
         results = []
         for start_logit, end_logit in zip(start_logits, end_logits):
             results.append({'start_logits':start_logit,"end_logits":end_logit })

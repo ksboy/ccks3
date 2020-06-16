@@ -490,7 +490,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
     # label_weight = label_count.sum()/label_count
     # label_weight += min(label_weight)*3
     # all_weights = torch.tensor([max([label_weight[sub_label] for sub_label in f.label]) for f in features], dtype=torch.float )
-    all_weights = []
+    all_weights = torch.tensor([1 for f in features], dtype=torch.float )
     
     dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
     return dataset, all_weights
@@ -812,18 +812,18 @@ def main():
         model.to(args.device)
         result, predictions, logits = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
         # Save results
-        output_test_results_file = os.path.join(checkpoint, "test2_results.txt")
+        output_test_results_file = os.path.join(checkpoint, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
             for key in sorted(result.keys()):
                 writer.write("{} = {}\n".format(key, str(result[key])))
         # Save predictions
-        output_test_predictions_file = os.path.join(checkpoint, "test2_predictions.json")
+        output_test_predictions_file = os.path.join(checkpoint, "test_predictions.json")
         results = []
         for prediction in predictions:
             results.append({'labels':prediction})
         write_file(results,output_test_predictions_file) 
         # Save logits
-        output_test_logits_file = os.path.join(checkpoint, "test2_logits.json")
+        output_test_logits_file = os.path.join(checkpoint, "test_logits.json")
         results = []
         for logit in logits:
             results.append({'logits':logit})
