@@ -1,5 +1,6 @@
 import json
 import re
+import collections
 
 def write_file(datas, output_file):
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -15,7 +16,7 @@ def remove_duplication(alist):
     return res
 
 
-def get_labels(path="./data/ccks4_2/event_schema.json", task='trigger', mode="ner"):
+def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
     if not path:
         if mode=='ner':
             return ["O", "B-ENTITY", "I-ENTITY"]
@@ -78,7 +79,7 @@ def data_val(input_file):
     arg_count2 = 0
     arg_role_count = 0
     arg_role_one_event_count = 0
-    # trigger_count = 0 # triggr
+    trigger_count = 0 # triggr
 
     for row in rows:
         if len(row)==1: print(row)
@@ -87,7 +88,7 @@ def data_val(input_file):
         arg_start_index_list=[]
         arg_start_index_map={}
         event_type_list = []
-        # trigger_start_index_list = []
+        trigger_start_index_list = []
 
         event_type_flag = False  # 两个不同类型的事件
         event_type_flag2 = False # 两个事件
@@ -96,7 +97,7 @@ def data_val(input_file):
         role_flag = False # 一个/多个事件，一个arg对应多个role：相同/不同
         arg_role_flag= False # 一个/多个事件，一个arg对应多个role：不同
         arg_role_one_event_flag= False # 一个事件 一个arg对应多个role：不同
-        # trigger_flag = False
+        trigger_flag = False
 
         for event in row["event_list"]:
             event_type = event["event_type"]
@@ -104,18 +105,19 @@ def data_val(input_file):
                 event_type_list.append(event_type)
             else:
                 event_type_flag2 = True
-                print(row)
+                # print(row)
                 if event_type not in event_type_list:
                     # event_class_count += 1
                     event_type_flag = True
                     # print(row)
             
-            # trigger_start_index= event["trigger_start_index"]
-            # if trigger_start_index not in trigger_start_index_list:
-            #     trigger_start_index_list.append(trigger_start_index)
-            # else:
-            #     trigger_flag = True
-            #     print(row)
+            trigger = event["trigger"]
+            trigger_start_index= event["trigger_start_index"]
+            if [trigger_start_index, trigger] not in trigger_start_index_list:
+                trigger_start_index_list.append([trigger_start_index, trigger])
+            else:
+                trigger_flag = True
+                # print(row)
 
             role_list = []
             role_map = {}
@@ -131,6 +133,9 @@ def data_val(input_file):
                     arg_start_index_flag = True
                     if argument!= role_map[role]:
                         arg_start_index_flag2 = True
+                        print(row)
+                    else:
+                        pass
                         # print(row)
                 
                 if argument_start_index not in arg_start_index_map_in_one_event:
@@ -147,9 +152,11 @@ def data_val(input_file):
                     arg_start_index_map[argument_start_index]= role
                 else: 
                     role_flag = True
-                    # print(row)
                     if role!= arg_start_index_map[argument_start_index]:
                         arg_role_flag = True
+                        # print(row)
+                    else:
+                        pass
                         # print(row)
     
         if role_flag:
@@ -171,10 +178,10 @@ def data_val(input_file):
             arg_role_count += 1
         if arg_role_one_event_flag:
             arg_role_one_event_count += 1
-        # if trigger_flag:
-        #     trigger_count += 1
+        if trigger_flag:
+            trigger_count += 1
     
-    print(event_type_count,event_type_count2, role_count, arg_count, arg_count2, arg_role_count, arg_role_one_event_count)
+    print(event_type_count, event_type_count2, role_count, arg_count, arg_count2, arg_role_count, arg_role_one_event_count, trigger_count)
 
 
 
@@ -237,48 +244,40 @@ def convert(input_file, output_file, mode="train"):
     for row in rows:
         row = json.loads(row)
         # assert(sum([len(text) for text in _split(row['content'])])==len(row['content']))
-        sub_text_list= get_sub(row['content'])
-        for text in sub_text_list:
-            # assert len(text) <= 510
-            text_all_count += 1
-            new_row = {}
-            new_row['id'] = row['doc_id']
-            new_row['text'] = text
-            if len(text)>510: text_out_count+=1
-            event_list = []
-            if mode=="train": 
-                for event in row["events"]:
-                    new_event = {}
-                    new_event["event_type"] = event["event_type"]
-                    arguments = []
+        # assert len(text) <= 510
+        text_all_count += 1
+        new_row = {}
+        new_row['id'] = row['id']
+        text = row['content']
+        new_row['text'] = text
+        if len(text)>510: text_out_count+=1
+        event_list = []
+        if mode=="train": 
+            for event in row["events"]:
+                new_event = {}
+                new_event["event_type"] = event["type"]
+                arguments = []
 
-                    role_list = list(event.keys())
-                    role_list.remove('event_type')
-                    role_list.remove('event_id')
-                    for role in role_list:
-                        arg_all_count += 1
-                        argument = event[role]
-                        if argument == "":
-                            continue
-                        # print(argument)
-                        argument_start_index_list = find_all(text, argument)
-                        # print(argument_start_index_list)
-                        if not argument_start_index_list:
-                            # print(row, role)
-                            continue
-                        # if argument_start_index_list[0]> 510: 
-                            # arg_out_count += 1
-                        for argument_start_index in argument_start_index_list:
-                            argument_map = {}
-                            argument_map['role'] = role
-                            argument_map['argument'] = argument
-                            argument_map['argument_start_index']= argument_start_index
-                            arguments.append(argument_map)
-                    new_event['arguments'] = arguments
-                    event_list.append(new_event)
+                for mention in event["mentions"]:
+                    arg_all_count += 1
+                    argument = mention["word"]
+                    role = mention["role"]
+                    argument_start_index = mention["span"][0]
+                    if role == "trigger":
+                        new_event["trigger"] = argument
+                        new_event["trigger_start_index"] = argument_start_index
+                        continue
 
-            new_row['event_list'] = event_list
-            res.append(new_row)
+                    argument_map = {}
+                    argument_map['role'] = role
+                    argument_map['argument'] = argument
+                    argument_map['argument_start_index']= argument_start_index
+                    arguments.append(argument_map)
+                new_event['arguments'] = arguments
+                event_list.append(new_event)
+
+        new_row['event_list'] = event_list
+        res.append(new_row)
     # print(res[:10])
     print(text_all_count, text_out_count, arg_all_count, arg_out_count)
     write_file(res, output_file)
@@ -287,17 +286,24 @@ def convert(input_file, output_file, mode="train"):
 def data_analysis(input_file):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     label_list= get_labels(task='trigger', mode="classification")
+    print(label_list)
     label_map = {label: i for i, label in enumerate(label_list)}
     label_count = [0 for i in range(len(label_list))]
     count = 0
+    len_list = []
     for row in rows:
         row = json.loads(row)
         text = row['text']
-        if len(text) > 510:
+        if len(text) > 254:
             count += 1
+        len_list.append(len(text))
         for event in row["event_list"]:
             event_type = event["event_type"]
             label_count[label_map[event_type]] += 1
+
+    obj = collections.Counter(len_list)
+    # print([[k,v] for k,v in obj.items()])
+    print(sorted([[k,v] for k,v in obj.items()], key=lambda x:x[0])[-10:])
     print(label_count)
     print(count)
 
@@ -357,11 +363,15 @@ if __name__ == '__main__':
     # labels = get_labels(path="./data/event_schema/event_schema.json", task='trigger', mode="classification")
     # print(len(labels), labels[50:60])
     
-    convert("./data/ccks4_2/train_init.json", "./data/ccks4_2/train_split.json")
-    # convert("./data/ccks4_2/dev_init.json", "./data/ccks4_2/dev_split.json", mode="dev")
-    # data_val("./data/ccks4_2/train.json")
+    # convert("./data/ccks_3_nolabel_data/train_base.json", "./data/base/train.json")
+    # convert("./data/ccks_3_nolabel_data/dev_base.json", "./data/base/test.json", mode="dev")
+    # convert("./data/ccks_3_nolabel_data/train.json", "./data/all/train.json")
+    # convert("./data/ccks_3_nolabel_data/dev.json", "./data/all/test.json", mode="dev")
+    
 
-    # data_analysis("./data/ccks4_2/train.json")
+    data_val("./data/base/train.json")
+    # data_analysis("./data/trans/train.json")
+    # data_analysis("./data/trans/test.json")
 
     # 无异常
     # position_val("./data/train_data/train.json")

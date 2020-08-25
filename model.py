@@ -707,6 +707,7 @@ class BertForTokenBinaryClassification(BertPreTrainedModel):
                 #      labels, labels.shape)
                 #2048 2048*435 2048 8*256 
                 start_loss = loss_fct(active_start_logits, active_start_labels.float())
+                active_loss = active_loss.float()
                 start_loss = start_loss * (active_loss.unsqueeze(-1))
                 start_loss = torch.sum(start_loss)/torch.sum(active_loss)
 

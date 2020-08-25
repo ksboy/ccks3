@@ -1,13 +1,13 @@
-MAX_LENGTH=512
+MAX_LENGTH=256
 TASK=role
 MODEL=/home/mhxia/whou/workspace/pretrained_models/chinese_roberta_wwm_large_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/role_bin/test_split/
-SCHEMA=./data/ccks4_2/event_schema.json
-OUTPUT_DIR=./output/role_bin/0/
-EVAL_BATCH_SIZE=32
+DATA_DIR=./data/role_trans/
+SCHEMA=./data/event_schema.json
+OUTPUT_DIR=./output/role_trans2/
+EVAL_BATCH_SIZE=192
 SEED=1
 
-CUDA_VISIBLE_DEVICES=0,1,2 python3 run_bi_ner.py \
+CUDA_VISIBLE_DEVICES=1 python3 run_bi_ner.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \

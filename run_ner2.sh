@@ -1,17 +1,17 @@
 MAX_LENGTH=256
 TASK=trigger
 MODEL=/home/mhxia/whou/workspace/pretrained_models/chinese_roberta_wwm_large_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/trigger_all/0/
+DATA_DIR=./data/trigger_trans/
 SCHEMA=./data/event_schema.json
-OUTPUT_DIR=./output/trigger_all/0/
+OUTPUT_DIR=./output/trigger_trans2/
 BATCH_SIZE=8
 EVAL_BATCH_SIZE=64
-NUM_EPOCHS=30
-SAVE_STEPS=300
+NUM_EPOCHS=3000
+SAVE_STEPS=100
 # SAVE_STEPS= $save_steps* gradient_accumulation_steps * batch_size * num_gpus
 WARMUP_STEPS=600
 SEED=1
-LR=3e-5
+LR=2e-5
 
 CUDA_VISIBLE_DEVICES=3 python3 run_ner.py \
 --task $TASK \

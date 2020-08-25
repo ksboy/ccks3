@@ -46,6 +46,7 @@ def index_output_bio_trigger(test_file, prediction_file, output_file):
         test = json.loads(test)
         tokens = test.pop('tokens')
         test['text'] = ''.join(tokens)
+        if "labels" in test: test.pop("labels")
 
         prediction = json.loads(prediction)
         labels = prediction["labels"]
@@ -53,7 +54,8 @@ def index_output_bio_trigger(test_file, prediction_file, output_file):
             print(labels, tokens)
             print(len(labels), len(tokens), index)
             break
-        test["labels"] = labels
+        t_ret = extract_result(test['text'], labels)
+        test["triggers"] = t_ret
 
         results.append(test)
     write_file(results, output_file)
@@ -398,6 +400,9 @@ def extract_result(text, labels):
         else:
             cur_type = None
             is_start = False
+
+    for item in ret:
+        item['text']= ''.join(item['text'])
     return ret
 
 ## trigger-ner + role-ner
@@ -471,31 +476,33 @@ def predict_data_process_ner_bin(trigger_file, role_file, schema_file, save_path
             role_type = r["role"]
             if role_type not in role_ret:
                 role_ret[role_type] = []
-            role_ret[role_type].append(u"".join(r["argument"]))
+            role_ret[role_type].append([u"".join(r["argument"]),r["argument_start_index"]])
         sent_role_mapping[d_json["id"]] = role_ret
 
     for d in trigger_datas:
         d_json = json.loads(d)
-        t_ret = extract_result(d_json["text"], d_json["labels"])
-        pred_event_types = list(set([t["type"] for t in t_ret]))
+        t_ret = d_json["triggers"]
+        pred_event_types = [[t["type"], t["text"], t["start"] ] for t in t_ret]
         event_list = []
-        for event_type in pred_event_types:
+        for event_type, trigger, trigger_start_index in pred_event_types:
+            if len(trigger) == 1:
+                # 一点小trick
+                continue
             role_list = schema[event_type]
-            arguments = []
+            arguments = [{"role": "trigger","span":[trigger_start_index, trigger_start_index+ len(trigger)], "word": trigger}]
             for role_type, ags in sent_role_mapping[d_json["id"]].items():
                 if role_type not in role_list:
                     continue
-                for arg in ags:
+                for arg, arg_start_index in ags:
                     if len(arg) == 1:
                         # 一点小trick
                         continue
-                    arguments.append({"role": role_type, "argument": arg})
-            event = {"event_type": event_type, "arguments": arguments}
+                    arguments.append({"role": role_type, "span":[arg_start_index, arg_start_index+ len(arg)], "word": arg})
+            event = {"type": event_type, "mentions": arguments}
             event_list.append(event)
         pred_ret.append({
             "id": d_json["id"],
-            "text": d_json["text"],
-            "event_list": event_list
+            "events": event_list
         })
     pred_ret = [json.dumps(r, ensure_ascii=False) for r in pred_ret]
     write_by_lines(save_path, pred_ret)
@@ -642,8 +649,12 @@ def ensemble(input_file, output_file):
 
 if __name__ == "__main__":
 
-    # index_output_bio_trigger("./data/trigger/dev.json" , "./output/trigger/checkpoint-best/eval_predictions.json","./output/trigger/checkpoint-best/eval_predictions_indexed.json" )
-    # index_output_bio_trigger("./data/trigger/test.json" , "./output/trigger/checkpoint-best/test_predictions.json","./output/trigger/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bio_trigger("./data/trigger_base/0/dev.json" , "./output/trigger_base/0/checkpoint-best/eval_predictions.json","./output/trigger_base/0/checkpoint-best/eval_predictions_indexed.json" )
+    # index_output_bio_trigger("./data/trigger_base/test.json" , "./output/trigger_base/0/checkpoint-best/test_predictions.json","./output/trigger_base/0/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bio_trigger("./data/trigger_trans/0/dev.json" , "./output/trigger_base/0/checkpoint-best/eval_predictions.json","./output/trigger_base/0/checkpoint-best/eval_predictions_indexed.json" )
+    # index_output_bio_trigger("./data/trigger_trans/test.json" , "./output/trigger_all/0/checkpoint-best/test_predictions.json","./output/trigger_all/0/checkpoint-best/test_predictions_indexed.json" )
+    index_output_bio_trigger("./data/trigger_trans/test.json" , "./output/trigger_trans2/checkpoint-best/test_predictions.json","./output/trigger_trans2/checkpoint-best/test_predictions_indexed.json" )
+
     
     # index_output_bin_trigger("./data/trigger_classify/dev.json" , "./output/trigger_classify/merge/eval_predictions_labels.json","./output/trigger_classify/merge/eval_predictions_indexed_labels.json" )
     # index_output_bin_trigger("./data/trigger_classify/test.json" , "./output/trigger_classify/0/checkpoint-best/test_predictions.json","./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json" )
@@ -654,8 +665,12 @@ if __name__ == "__main__":
     # index_output_segment_bin("./data/role_segment_bin/dev.json" , "./output/role_segment_bin/checkpoint-best/eval_predictions.json","./output/role_segment_bin/checkpoint-best/eval_predictions_indexed.json" )
     # index_output_segment_bin("./data/role_segment_bin/test.json" , "./output/role_segment_bin/checkpoint-best/test_predictions.json","./output/role_segment_bin/checkpoint-best/test_predictions_indexed.json" )
 
-    # index_output_bin_arg("./data/role_bin/dev.json" , "./output/role_bin/merge/eval_predictions_labels.json","./output/role_bin/merge/eval_predictions_indexed_labels.json" )
-    # index_output_bin_arg("./data/role_bin/test_split/test.json" , "./output/role_bin/0/checkpoint-best/test_predictions.json","./output/role_bin/0/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_base/0/dev.json" , "./output/role_base/0/checkpoint-best/eval_predictions.json","./output/role_base/0/checkpoint-best/eval_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_base/test.json" , "./output/role_base/0/checkpoint-best/test_predictions.json","./output/role_base/0/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_trans/0/dev.json" , "./output/role_base/0/checkpoint-best/eval_predictions.json","./output/role_base/0/checkpoint-best/eval_predictions_indexed.json" )
+    index_output_bin_arg("./data/role_trans/test.json" , "./output/role_trans2/checkpoint-best/test_predictions.json","./output/role_trans2/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_all/0/dev.json" , "./output/role_all/0/checkpoint-best/eval_predictions.json","./output/role_all/0/checkpoint-best/eval_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_trans/test.json" , "./output/role_all/0/checkpoint-best/test_predictions.json","./output/role_all/0/checkpoint-best/test_predictions_indexed.json" )
 
     # convert_bio_to_segment("./output/trigger/checkpoint-best/test_predictions_indexed.json",\
     #     "./output/trigger/checkpoint-best/test_predictions_indexed_semgent_id.json")
@@ -665,7 +680,6 @@ if __name__ == "__main__":
     # compute_matric("./data/trigger_classify/dev.json", "./output/trigger/checkpoint-best/eval_predictions_labels.json")
 
 
-   
     # predict_data_process_ner(
     #     trigger_file= "./output/trigger/checkpoint-best/test_predictions_indexed.json", \
     #     role_file = "./output/role2/checkpoint-best/test_predictions_indexed.json", \
@@ -673,16 +687,31 @@ if __name__ == "__main__":
     #     save_path =  "./results/test_pred2.json")
 
     # predict_data_process_ner_bin(
-    #     trigger_file= "./output/trigger/checkpoint-best/test_predictions_indexed.json", \
-    #     role_file = "./output/role_bin/merge/test_predictions_indexed_labels.json", \
-    #     schema_file = "./data/event_schema/event_schema.json", \
-    #     save_path =  "./results/test_pred_role_bin_merge.json")
+    #     trigger_file= "./output/trigger_base/0/checkpoint-best/eval_predictions_indexed.json", \
+    #     role_file = "./output/role_base/0/checkpoint-best/eval_predictions_indexed.json", \
+    #     schema_file = "./data/event_schema.json", \
+    #     save_path =  "./results/eval_base.json")
+    # predict_data_process_ner_bin(
+    #     trigger_file= "./output/trigger_base/0/checkpoint-best/test_predictions_indexed.json", \
+    #     role_file = "./output/role_base/0/checkpoint-best/test_predictions_indexed.json", \
+    #     schema_file = "./data/event_schema.json", \
+    #     save_path =  "./results/test_base.json")
+    # predict_data_process_ner_bin(
+    #     trigger_file= "./output/trigger_all/0/checkpoint-best/test_predictions_indexed.json", \
+    #     role_file = "./output/role_all/0/checkpoint-best/test_predictions_indexed.json", \
+    #     schema_file = "./data/event_schema.json", \
+    #     save_path =  "./results/test_trans2.json")
+    predict_data_process_ner_bin(
+        trigger_file= "./output/trigger_trans/checkpoint-best/test_predictions_indexed.json", \
+        role_file = "./output/role_trans2/checkpoint-best/test_predictions_indexed.json", \
+        schema_file = "./data/event_schema copy.json", \
+        save_path =  "./results/test_trans5.json")
 
-    predict_data_process_bin(
-        trigger_file= "./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json", \
-        role_file = "./output/role_bin/0/checkpoint-best/test_predictions_indexed.json", \
-        schema_file = "./data/ccks4_2/event_schema.json", \
-        save_path =  "./results/test_pred_trigger_bin_role_bin_split.json")
+    # predict_data_process_bin(
+    #     trigger_file= "./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json", \
+    #     role_file = "./output/role_bin/0/checkpoint-best/test_predictions_indexed.json", \
+    #     schema_file = "./data/ccks4_2/event_schema.json", \
+    #     save_path =  "./results/test_pred_trigger_bin_role_bin_split.json")
 
     # ensemble("./output/role_segment_bin/checkpoint-best/eval_predictions_indexed.json",\
     #       "./results/eval_pred_bi_segment.json")

@@ -357,10 +357,10 @@ if __name__ == '__main__':
 
     # trigger_classify_file_remove_id("./data/trigger_classify/dev.json", "./data/trigger_classify/dev_without_id.json")
 
-    # split_data("./data/trigger_classify/train.json",  "./data/trigger_classify",  num_split=5)
-    # split_data("./data/role_bin/train.json",  "./data/role_bin",  num_split=5)
-
-    # trigger_process_bio("./data/train_data/train.json", "./data/trigger/train.json")
+    # trigger_process_bio("./data/base/train.json", "./data/trigger_base/train.json")
+    # trigger_process_bio("./data/base/test.json", "./data/trigger_base/test.json")
+    # trigger_process_bio("./data/all/train.json", "./data/trigger_all/train.json")
+    # trigger_process_bio("./data/all/test.json", "./data/trigger_all/test.json")
 
     # trigger_classify_process("./data/ccks4_2/train.json", "./data/trigger_classify/train.json")
     # trigger_classify_process("./data/ccks4_2/dev.json", "./data/trigger_classify/test.json")
@@ -369,8 +369,10 @@ if __name__ == '__main__':
     # trigger_process_binary("./data/dev_data/dev.json","./data/trigger_bin/dev.json")
     # trigger_process_binary("./data/test1_data/test1.json", "./data/trigger_bin/test.json",is_predict=True)
 
-    # role_process_binary("./data/ccks4_2/train.json", "./data/role_bin/train.json")
-    role_process_binary("./data/ccks4_2/dev_split.json","./data/role_bin/test_split/test.json")
+    # role_process_binary("./data/base/test.json", "./data/role_base/test.json")
+    # role_process_binary("./data/base/train.json","./data/role_base/train.json")
+    # role_process_binary("./data/all/test.json", "./data/role_all/test.json")
+    # role_process_binary("./data/all/train.json","./data/role_all/train.json")
 
     # role_process_segment("./data/train_data/train.json", "./data/role_segment/train.json")
     # role_process_segment("./data/dev_data/dev.json","./data/role_segment/dev.json")
@@ -382,6 +384,12 @@ if __name__ == '__main__':
     # joint_process_binary("./data/train_data/train.json", "./data/joint_bin/train.json")
     # joint_process_binary("./data/dev_data/dev.json","./data/joint_bin/dev.json")
     # joint_process_binary("./data/test1_data/test1.json", "./data/joint_bin/test.json",is_predict=True)
+
+    # split_data("./data/trigger_base/train.json",  "./data/trigger_base",  num_split=5)
+    # split_data("./data/trigger_all/train.json",  "./data/trigger_all",  num_split=5)
+    # split_data("./data/role_all/train.json",  "./data/role_all",  num_split=5)
+    split_data("./data/role_trans/train.json",  "./data/role_all",  num_split=5)
+    split_data("./data/trigger_trans/train.json",  "./data/role_all",  num_split=5)
 
     # event_class_list = get_event_class("./data/event_schema/event_schema.json")
     # for event_class in event_class_list:
