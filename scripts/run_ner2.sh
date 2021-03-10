@@ -1,19 +1,19 @@
-MAX_LENGTH=384
-TASK=role
-MODEL=/home/mhxia/whou/workspace/pretrained_models/chinese_roberta_wwm_large_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/role_bin_train_dev/2/
-SCHEMA=./data/event_schema/event_schema.json
-OUTPUT_DIR=./output/role_bin_train_dev/2/
-BATCH_SIZE=4
+MAX_LENGTH=256
+TASK=trigger
+MODEL=~/workspace/pretrained_models/chinese_roberta_wwm_large_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
+DATA_DIR=./data/trigger_trans/
+SCHEMA=./data/event_schema.json
+OUTPUT_DIR=./output/trigger_trans_test/
+BATCH_SIZE=8
 EVAL_BATCH_SIZE=64
-NUM_EPOCHS=20
-SAVE_STEPS=300
+NUM_EPOCHS=3000
+SAVE_STEPS=100
 # SAVE_STEPS= $save_steps* gradient_accumulation_steps * batch_size * num_gpus
-WARMUP_STEPS=1000
+WARMUP_STEPS=600
 SEED=1
-LR=3e-5
+LR=2e-5
 
-CUDA_VISIBLE_DEVICES=0,1 python3 run_bi_ner.py \
+CUDA_VISIBLE_DEVICES=0,1 python3 run_ner.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \
@@ -33,13 +33,14 @@ CUDA_VISIBLE_DEVICES=0,1 python3 run_bi_ner.py \
 --save_steps $SAVE_STEPS \
 --logging_steps $SAVE_STEPS \
 --num_train_epochs $NUM_EPOCHS \
---early_stop 3 \
+--early_stop 4 \
 --learning_rate $LR \
---weight_decay 0.01 \
+--weight_decay 0 \
 --warmup_steps $WARMUP_STEPS \
 --seed $SEED 
-# --fp16 
-# --overwrite_cache  
+# --overwrite_cache 
 # --fp16 \
 # --freeze 
 # --eval_all_checkpoints \
+
+

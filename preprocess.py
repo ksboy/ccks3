@@ -53,6 +53,7 @@ def trigger_process_bio(input_file, output_file, is_predict=False):
             labels[trigger_start_index]= "B-{}".format(event_type)
             for i in range(1, len(trigger)):
                 labels[trigger_start_index+i]= "I-{}".format(event_type)
+                # labels[trigger_start_index+i]= "I-{}".format("触发词")
         results.append({"id":row["id"], "tokens":list(row["text"]), "labels":labels})
     write_file(results,output_file)
 
@@ -357,10 +358,10 @@ if __name__ == '__main__':
 
     # trigger_classify_file_remove_id("./data/trigger_classify/dev.json", "./data/trigger_classify/dev_without_id.json")
 
-    # trigger_process_bio("./data/base/train.json", "./data/trigger_base/train.json")
-    # trigger_process_bio("./data/base/test.json", "./data/trigger_base/test.json")
-    # trigger_process_bio("./data/all/train.json", "./data/trigger_all/train.json")
-    # trigger_process_bio("./data/all/test.json", "./data/trigger_all/test.json")
+    # trigger_process_bio("./data/FewFC-main/converted/train_base.json", "./data/FewFC-main/trigger_base/train.json")
+    # trigger_process_bio("./data/FewFC-main/converted/test_base.json", "./data/FewFC-main/trigger_base/test.json")
+    # trigger_process_bio("./data/FewFC-main/converted/train_trans.json", "./data/FewFC-main/trigger_trans/train.json")
+    # trigger_process_bio("./data/FewFC-main/converted/test_trans.json", "./data/FewFC-main/trigger_trans/test.json")
 
     # trigger_classify_process("./data/ccks4_2/train.json", "./data/trigger_classify/train.json")
     # trigger_classify_process("./data/ccks4_2/dev.json", "./data/trigger_classify/test.json")
@@ -385,11 +386,11 @@ if __name__ == '__main__':
     # joint_process_binary("./data/dev_data/dev.json","./data/joint_bin/dev.json")
     # joint_process_binary("./data/test1_data/test1.json", "./data/joint_bin/test.json",is_predict=True)
 
-    # split_data("./data/trigger_base/train.json",  "./data/trigger_base",  num_split=5)
-    # split_data("./data/trigger_all/train.json",  "./data/trigger_all",  num_split=5)
+    split_data("./data/FewFC-main/trigger_base/train.json",  "./data/FewFC-main/trigger_base",  num_split=5)
+    split_data("./data/FewFC-main/trigger_trans/train.json",  "./data/FewFC-main/trigger_trans",  num_split=5)
     # split_data("./data/role_all/train.json",  "./data/role_all",  num_split=5)
-    split_data("./data/role_trans/train.json",  "./data/role_all",  num_split=5)
-    split_data("./data/trigger_trans/train.json",  "./data/role_all",  num_split=5)
+    # split_data("./data/role_trans/train.json",  "./data/role_all",  num_split=5)
+    # split_data("./data/trigger_trans/train.json",  "./data/role_all",  num_split=5)
 
     # event_class_list = get_event_class("./data/event_schema/event_schema.json")
     # for event_class in event_class_list:

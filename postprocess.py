@@ -653,7 +653,7 @@ if __name__ == "__main__":
     # index_output_bio_trigger("./data/trigger_base/test.json" , "./output/trigger_base/0/checkpoint-best/test_predictions.json","./output/trigger_base/0/checkpoint-best/test_predictions_indexed.json" )
     # index_output_bio_trigger("./data/trigger_trans/0/dev.json" , "./output/trigger_base/0/checkpoint-best/eval_predictions.json","./output/trigger_base/0/checkpoint-best/eval_predictions_indexed.json" )
     # index_output_bio_trigger("./data/trigger_trans/test.json" , "./output/trigger_all/0/checkpoint-best/test_predictions.json","./output/trigger_all/0/checkpoint-best/test_predictions_indexed.json" )
-    index_output_bio_trigger("./data/trigger_trans/test.json" , "./output/trigger_trans2/checkpoint-best/test_predictions.json","./output/trigger_trans2/checkpoint-best/test_predictions_indexed.json" )
+    index_output_bio_trigger("./data/FewFC-main/trigger_trans/test.json" , "./output/trigger_trans/0/checkpoint-best/test_predictions.json","./output/trigger_trans/0/checkpoint-best/test_predictions_indexed.json" )
 
     
     # index_output_bin_trigger("./data/trigger_classify/dev.json" , "./output/trigger_classify/merge/eval_predictions_labels.json","./output/trigger_classify/merge/eval_predictions_indexed_labels.json" )
@@ -668,7 +668,7 @@ if __name__ == "__main__":
     # index_output_bin_arg("./data/role_base/0/dev.json" , "./output/role_base/0/checkpoint-best/eval_predictions.json","./output/role_base/0/checkpoint-best/eval_predictions_indexed.json" )
     # index_output_bin_arg("./data/role_base/test.json" , "./output/role_base/0/checkpoint-best/test_predictions.json","./output/role_base/0/checkpoint-best/test_predictions_indexed.json" )
     # index_output_bin_arg("./data/role_trans/0/dev.json" , "./output/role_base/0/checkpoint-best/eval_predictions.json","./output/role_base/0/checkpoint-best/eval_predictions_indexed.json" )
-    index_output_bin_arg("./data/role_trans/test.json" , "./output/role_trans2/checkpoint-best/test_predictions.json","./output/role_trans2/checkpoint-best/test_predictions_indexed.json" )
+    # index_output_bin_arg("./data/role_trans/test.json" , "./output/role_trans2/checkpoint-best/test_predictions.json","./output/role_trans2/checkpoint-best/test_predictions_indexed.json" )
     # index_output_bin_arg("./data/role_all/0/dev.json" , "./output/role_all/0/checkpoint-best/eval_predictions.json","./output/role_all/0/checkpoint-best/eval_predictions_indexed.json" )
     # index_output_bin_arg("./data/role_trans/test.json" , "./output/role_all/0/checkpoint-best/test_predictions.json","./output/role_all/0/checkpoint-best/test_predictions_indexed.json" )
 
@@ -701,11 +701,11 @@ if __name__ == "__main__":
     #     role_file = "./output/role_all/0/checkpoint-best/test_predictions_indexed.json", \
     #     schema_file = "./data/event_schema.json", \
     #     save_path =  "./results/test_trans2.json")
-    predict_data_process_ner_bin(
-        trigger_file= "./output/trigger_trans/checkpoint-best/test_predictions_indexed.json", \
-        role_file = "./output/role_trans2/checkpoint-best/test_predictions_indexed.json", \
-        schema_file = "./data/event_schema copy.json", \
-        save_path =  "./results/test_trans5.json")
+    # predict_data_process_ner_bin(
+    #     trigger_file= "./output/trigger_trans/checkpoint-best/test_predictions_indexed.json", \
+    #     role_file = "./output/role_trans2/checkpoint-best/test_predictions_indexed.json", \
+    #     schema_file = "./data/event_schema copy.json", \
+    #     save_path =  "./results/test_trans5.json")
 
     # predict_data_process_bin(
     #     trigger_file= "./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json", \

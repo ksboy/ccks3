@@ -131,6 +131,7 @@ dmypy.json
 # data model 
 
 output/
+log/
 data/
-results/
+result/
 runs/

@@ -363,13 +363,13 @@ if __name__ == '__main__':
     # labels = get_labels(path="./data/event_schema/event_schema.json", task='trigger', mode="classification")
     # print(len(labels), labels[50:60])
     
-    # convert("./data/ccks_3_nolabel_data/train_base.json", "./data/base/train.json")
-    # convert("./data/ccks_3_nolabel_data/dev_base.json", "./data/base/test.json", mode="dev")
-    # convert("./data/ccks_3_nolabel_data/train.json", "./data/all/train.json")
-    # convert("./data/ccks_3_nolabel_data/dev.json", "./data/all/test.json", mode="dev")
+    convert("./data/FewFC-main/rearranged/train_base.json", "./data/FewFC-main/converted/train_base.json")
+    convert("./data/FewFC-main/rearranged/test_base.json", "./data/FewFC-main/converted/test_base.json")
+    convert("./data/FewFC-main/rearranged/train_trans.json", "./data/FewFC-main/converted/train_trans.json")
+    convert("./data/FewFC-main/rearranged/test_trans.json", "./data/FewFC-main/converted/test_trans.json")
     
 
-    data_val("./data/base/train.json")
+    # data_val("./data/base/train.json")
     # data_analysis("./data/trans/train.json")
     # data_analysis("./data/trans/test.json")
 
@@ -382,5 +382,3 @@ if __name__ == '__main__':
     # read_write("./results/test1.trigger.pred.json", "./results/paddle.trigger.json")
 
     # schema_analysis()
-
-

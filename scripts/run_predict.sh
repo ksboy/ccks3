@@ -1,13 +1,13 @@
 MAX_LENGTH=256
-TASK=role
-MODEL=/home/mhxia/whou/workspace/pretrained_models/chinese_roberta_wwm_large_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/role_trans/
+TASK=trigger
+MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
+DATA_DIR=./data/FewFC-main/trigger_trans/
 SCHEMA=./data/event_schema.json
-OUTPUT_DIR=./output/role_trans2/
+OUTPUT_DIR=./output/trigger_trans_finetuned/0/
 EVAL_BATCH_SIZE=192
 SEED=1
 
-CUDA_VISIBLE_DEVICES=1 python3 run_bi_ner.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \
@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=1 python3 run_bi_ner.py \
 --output_dir $OUTPUT_DIR \
 --max_seq_length  $MAX_LENGTH \
 --per_gpu_eval_batch_size $EVAL_BATCH_SIZE \
---seed $SEED \
+--seed $SEED 
 # --fp16 \
 # --freeze \
 # --overwrite_cache \

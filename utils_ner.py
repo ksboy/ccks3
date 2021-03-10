@@ -62,7 +62,9 @@ def read_examples_from_file(data_dir, mode):
                 continue
             line_json = json.loads(line)
             words = line_json['tokens']
-            if mode=='test': labels=['O']*len(words)
+            if mode=='test': 
+                # labels=['O']*len(words)
+                labels = line_json['labels']
             else: labels = line_json['labels']
             if len(words)!= len(labels):
                 print(words, labels," length misMatch")
