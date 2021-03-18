@@ -1,10 +1,10 @@
 MAX_LENGTH=256
 TASK=trigger
 MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/FewFC-main/trigger_trans/
+DATA_DIR=./data/FewFC-main/base/
 SCHEMA=./data/event_schema.json
-OUTPUT_DIR=./output/trigger_trans_finetuned/0/
-EVAL_BATCH_SIZE=192
+OUTPUT_DIR=./output/trigger_base/0/
+EVAL_BATCH_SIZE=64
 SEED=1
 
 CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \

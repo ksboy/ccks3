@@ -19,23 +19,23 @@
 import logging
 import os
 import json
-
+from utils import get_labels
 logger = logging.getLogger(__name__)
 
 
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, guid, words, labels):
+    def __init__(self, id, words, labels):
         """Constructs a InputExample.
 
         Args:
-            guid: Unique id for the example.
+            id: Unique id for the example.
             words: list. The words of the sequence.
             labels: (Optional) list. The labels for each word of the sequence. This should be
             specified for train and dev examples, but not for test examples.
         """
-        self.guid = guid
+        self.id = id
         self.words = words
         self.labels = labels
 
@@ -49,30 +49,58 @@ class InputFeatures(object):
         self.segment_ids = segment_ids
         self.label_ids = label_ids
 
+def trigger_process_bio(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        labels = ['O']*len(row["text"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
+            continue
+        for event in row["event_list"]:
+            trigger = event["trigger"]
+            event_type = event["event_type"]
+            trigger_start_index = event["trigger_start_index"]
+            labels[trigger_start_index]= "B-{}".format(event_type)
+            for i in range(1, len(trigger)):
+                labels[trigger_start_index+i]= "I-{}".format(event_type)
+                # labels[trigger_start_index+i]= "I-{}".format("触发词")
+        results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
+    # write_file(results,output_file)
+    return results
 
-def read_examples_from_file(data_dir, mode):
+def role_process_bio(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        labels = ['O']*len(row["text"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
+            continue
+        for event in row["event_list"]:
+            event_type = event["event_type"]
+            for arg in event["arguments"]:
+                role = arg['role']
+                argument = arg['argument']
+                argument_start_index = arg["argument_start_index"]
+                labels[argument_start_index]= "B-{}".format(role)
+                for i in range(1, len(argument)):
+                    labels[argument_start_index+i]= "I-{}".format(role)
+                # if arg['alias']!=[]: print(arg['alias'])
+        results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
+    # write_file(results,output_file)
+    return results
+
+
+def read_examples_from_file(data_dir, mode, task):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
-    guid_index = 1
-    examples = []
-    with open(file_path, encoding="utf-8") as f:
-        words = []
-        labels = []
-        for line in f:
-            if line=='\n' or line=='':
-                continue
-            line_json = json.loads(line)
-            words = line_json['tokens']
-            if mode=='test': 
-                # labels=['O']*len(words)
-                labels = line_json['labels']
-            else: labels = line_json['labels']
-            if len(words)!= len(labels):
-                print(words, labels," length misMatch")
-                continue
-            examples.append(InputExample(guid="{}-{}".format(mode, guid_index), words=words, labels=labels))
-            guid_index += 1
-                
-    return examples
+    if task=='trigger': items = trigger_process_bio(file_path)
+    elif task=='role': items = role_process_bio(file_path)
+    return [InputExample(**item) for item in items]
 
 
 def convert_examples_to_features(
@@ -197,7 +225,7 @@ def convert_examples_to_features(
 
         if ex_index < 5:
             logger.info("*** Example ***")
-            logger.info("guid: %s", example.guid)
+            logger.info("id: %s", example.id)
             logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
             logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s", " ".join([str(x) for x in input_mask]))

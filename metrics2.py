@@ -80,7 +80,7 @@ def compute_matric(label_file, pred_file):
             for j, event_p in enumerate(events_p):
                 if event_l['type'] == event_p['type']:
                     type = event_l['type']
-                    candidates[type].append([i, j, event_metric(event_l, event_p)])
+                    candidates[type].append([i, j, event_metric_recall(event_l, event_p)])
         
         for type in type_list:
             candidates[type].sort(key=lambda x:x[-1], reverse=True)
@@ -98,8 +98,8 @@ def compute_matric(label_file, pred_file):
     print(pr, re, f1)
     return f1
 
-metric = compute_matric("./data/FewFC-main/original/dev.json",
-    "./result/result.json")
+metric = compute_matric("./data/FewFC-main/rearranged/test_trans.json",
+    "./result/test_trans.json")
 print(metric)
 
 

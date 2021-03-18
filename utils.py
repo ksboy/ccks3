@@ -51,7 +51,7 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
                 else:
                     labels.append(role_type)
         return remove_duplication(labels)
-        
+    # 特定类型事件 [TASK] 中的角色
     else:
         labels = []
         rows = open(path, encoding='utf-8').read().splitlines()
@@ -133,7 +133,7 @@ def data_val(input_file):
                     arg_start_index_flag = True
                     if argument!= role_map[role]:
                         arg_start_index_flag2 = True
-                        print(row)
+                        # print(row)
                     else:
                         pass
                         # print(row)
@@ -143,7 +143,8 @@ def data_val(input_file):
                 else:
                     if role!= arg_start_index_map_in_one_event[argument_start_index]:
                         arg_role_one_event_flag = True
-                        # print(row)
+                        # if event_type != "股份股权转让":
+                            # print(row)
                         # return 0
 
 
@@ -154,7 +155,7 @@ def data_val(input_file):
                     role_flag = True
                     if role!= arg_start_index_map[argument_start_index]:
                         arg_role_flag = True
-                        # print(row)
+                        if len(row["event_list"])>1: print(row)
                     else:
                         pass
                         # print(row)
@@ -178,6 +179,7 @@ def data_val(input_file):
             arg_role_count += 1
         if arg_role_one_event_flag:
             arg_role_one_event_count += 1
+            # print(row)
         if trigger_flag:
             trigger_count += 1
     
@@ -360,16 +362,16 @@ def schema_analysis(path="./data/event_schema/event_schema.json"):
 
 
 if __name__ == '__main__':
-    # labels = get_labels(path="./data/event_schema/event_schema.json", task='trigger', mode="classification")
-    # print(len(labels), labels[50:60])
+    # labels = get_labels(path="./data/event_schema/base.json", task='role', mode="classification")
+    # print(len(labels))
     
-    convert("./data/FewFC-main/rearranged/train_base.json", "./data/FewFC-main/converted/train_base.json")
-    convert("./data/FewFC-main/rearranged/test_base.json", "./data/FewFC-main/converted/test_base.json")
-    convert("./data/FewFC-main/rearranged/train_trans.json", "./data/FewFC-main/converted/train_trans.json")
-    convert("./data/FewFC-main/rearranged/test_trans.json", "./data/FewFC-main/converted/test_trans.json")
+    # convert("./data/FewFC-main/rearranged/train_base.json", "./data/FewFC-main/converted/train_base.json")
+    # convert("./data/FewFC-main/rearranged/test_base.json", "./data/FewFC-main/converted/test_base.json")
+    # convert("./data/FewFC-main/rearranged/train_trans.json", "./data/FewFC-main/converted/train_trans.json")
+    # convert("./data/FewFC-main/rearranged/test_trans.json", "./data/FewFC-main/converted/test_trans.json")
     
 
-    # data_val("./data/base/train.json")
+    data_val("./data/FewFC-main/converted/train_base.json")
     # data_analysis("./data/trans/train.json")
     # data_analysis("./data/trans/test.json")
 
