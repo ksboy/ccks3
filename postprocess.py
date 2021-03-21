@@ -36,37 +36,37 @@ def write_by_lines(path, data, t_code="utf-8"):
     with open(path, "w") as outfile:
         [outfile.write(d + "\n") for d in data]
 
-def _extract_entities(text, labels):
-    """extract_entities"""
-    ret, is_start, cur_type = [], False, None
-    for i, label in enumerate(labels):
-        if label != u"O":
-            _type = label[2:]
-            if label.startswith(u"B-"):
-                is_start = True
-                cur_type = _type
-                ret.append({"start": i, "text": [text[i]], "type": _type})
-            elif _type != cur_type:
-                """
-                # 如果是没有B-开头的，则不要这部分数据
-                cur_type = None
-                is_start = False
-                """
-                cur_type = _type
-                is_start = True
-                ret.append({"start": i, "text": [text[i]], "type": _type})
-            elif is_start:
-                ret[-1]["text"].append(text[i])
-            else:
-                cur_type = None
-                is_start = False
-        else:
-            cur_type = None
-            is_start = False
+# def _extract_entities(text, labels):
+#     """extract_entities"""
+#     ret, is_start, cur_type = [], False, None
+#     for i, label in enumerate(labels):
+#         if label != u"O":
+#             _type = label[2:]
+#             if label.startswith(u"B-"):
+#                 is_start = True
+#                 cur_type = _type
+#                 ret.append({"start": i, "text": [text[i]], "type": _type})
+#             elif _type != cur_type:
+#                 """
+#                 # 如果是没有B-开头的，则不要这部分数据
+#                 cur_type = None
+#                 is_start = False
+#                 """
+#                 cur_type = _type
+#                 is_start = True
+#                 ret.append({"start": i, "text": [text[i]], "type": _type})
+#             elif is_start:
+#                 ret[-1]["text"].append(text[i])
+#             else:
+#                 cur_type = None
+#                 is_start = False
+#         else:
+#             cur_type = None
+#             is_start = False
 
-    for item in ret:
-        item['text']= ''.join(item['text'])
-    return ret
+#     for item in ret:
+#         item['text']= ''.join(item['text'])
+#     return ret
 
 def extract_entities(text, labels):
     items = get_entities(labels)

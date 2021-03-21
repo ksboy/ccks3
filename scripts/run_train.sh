@@ -1,10 +1,10 @@
 MAX_LENGTH=256
-TASK=trigger
+TASK=role
 MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
 # MODEL=./output/trigger_base/0/
-DATA_DIR=./data/FewFC-main/base/0/
-SCHEMA=./data/event_schema/base.json
-OUTPUT_DIR=./output/trigger_base2/0/
+DATA_DIR=./data/FewFC-main/all/1/
+SCHEMA=./data/event_schema/all.json
+OUTPUT_DIR=./output/role_all_bin/1/
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=45
@@ -14,6 +14,8 @@ WARMUP_STEPS=100
 SEED=1
 LR=3e-5
 
+# CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
+# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_bi_ner.py \
 CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
 --task $TASK \
 --model_type bert \
@@ -40,8 +42,8 @@ CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
 --warmup_steps $WARMUP_STEPS \
 --seed $SEED \
 --overwrite_output_dir \
---fp16 \
---overwrite_cache 
+--overwrite_cache > $OUTPUT_DIR/output.log 2>&1 &
+# --fp16 \
 # --freeze 
 # --eval_all_checkpoints \
 

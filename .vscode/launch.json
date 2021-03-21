@@ -11,6 +11,15 @@
             "program": "${file}",
             "cwd": "${fileDirname}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Attach",
+            "type": "python",
+            "request": "attach",
+            "connect": {
+              "host": "localhost",
+              "port": 8888
+             }
         }
     ]
 }

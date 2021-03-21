@@ -56,7 +56,8 @@ from transformers import (
 from model import BertForTokenClassificationWithDiceLoss, BertForTokenClassificationWithTrigger,\
      BertForTokenBinaryClassification, BertForTokenBinaryClassificationWithTrigger
 from utils import get_labels
-from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
+from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities, \
+    f1_score, precision_score, recall_score
 # from utils_ner import convert_examples_to_features, get_labels, read_examples_from_file
 from utils import write_file
 
@@ -355,74 +356,28 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
         return s
 
     threshold = 0.5
-    start_logits = sigmoid(start_preds)
-    start_preds = start_logits > threshold # 1498*256*217
-    end_logits = sigmoid(end_preds)
-    end_preds = end_logits > threshold
+    start_preds = sigmoid(start_preds) > threshold 
+    end_preds = sigmoid(end_preds) > threshold
 
-    # 1498*256*217
-    sample_num, seq_length, num_labels=  start_out_label_ids.shape
-    
-    out_label_list = []
-    preds_list = []
-    
-    dis = 160
-    # labels
-    for i in trange(sample_num):   # sample_index
-        for j in range(seq_length):  # token_index 
-            if not attention_mask[i, j]: continue
-            # 实体 头
-            for k in range(num_labels):  
-                if start_out_label_ids[i][j][k]:
-                    # 寻找 实体尾 
-                    for l in range(j, min(j+ dis, seq_length)):
-                        if end_out_label_ids[i][l][k]:
-                            out_label_list.append((i, j, l, k)) # index, start, end, label
-                            break
-    # print(out_label_list[:5])
-    # preds
-    batch_preds_list = []
-    for i in trange(sample_num):   # batch_index
-        cur_preds_list=[]
-        for j in range(seq_length):  # token_index 
-            # 实体 头
-            if not attention_mask[i, j]: continue
-            # 寻找 实体尾 
-            for k in range(num_labels):  
-                if start_preds[i][j][k]:
-                    for l in range(j, min(j+ dis, seq_length)):
-                        if end_preds[i][l][k]:
-                            cur_preds_list.append((i, j, l, k)) # index, start, end, label
-                            break
-        batch_preds_list.append(cur_preds_list)
+    # start_out_label_ids.shape 1498*256*217 
+    batch_out_label_list= get_entities(start_out_label_ids, end_out_label_ids, attention_mask)
+    batch_preds_list= get_entities(start_preds, end_preds, attention_mask)
     # print(batch_preds_list[:5])
     # 变成 一维
+    out_label_list = []
+    preds_list = []
     for row_preds_list in batch_preds_list:
         for pred in row_preds_list:
             preds_list.append(pred)
-
-    # print(preds_list[:10])
-    nb_correct  = 0
-    for out_label in tqdm(out_label_list, desc="Computing Metric"):
-        # for pred in preds_list:
-        #     if out_label==pred:
-        #         nb_correct+=1
-        if out_label in preds_list:
-            nb_correct += 1
-            continue
-    nb_pred = len(preds_list)
-    nb_true = len(out_label_list)
-    # print(nb_correct, nb_pred, nb_true)
-
-    p = nb_correct / nb_pred if nb_pred > 0 else 0
-    r = nb_correct / nb_true if nb_true > 0 else 0
-    f1 = 2 * p * r / (p + r) if p + r > 0 else 0
+    for row_out_label_list in batch_out_label_list:
+        for out_label in row_out_label_list:
+            out_label_list.append(out_label)
 
     results = {
         "loss": eval_loss,
-        "precision":  p,
-        "recall": r,
-        "f1": f1,
+        "precision":  precision_score(out_label_list, preds_list),
+        "recall": recall_score(out_label_list, preds_list),
+        "f1":  f1_score(out_label_list, preds_list),
     }
 
     logger.info("***** Eval results %s *****", prefix)

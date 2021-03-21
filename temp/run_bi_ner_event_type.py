@@ -364,7 +364,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     out_label_list = []
     preds_list = []
     
-    dis = 160
+    dis = 12
     # labels
     for i in trange(sample_num):   # sample_index
         for j in range(seq_length):  # token_index 

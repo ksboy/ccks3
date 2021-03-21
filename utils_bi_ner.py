@@ -54,8 +54,6 @@ class InputFeatures(object):
 
 
 def role_process_bin(input_file, is_predict=False):
-    label_list = get_labels(task= "role", mode="classification")
-    label_map = {label: i for i, label in enumerate(label_list)}
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     count = 0
@@ -75,7 +73,6 @@ def role_process_bin(input_file, is_predict=False):
             event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
-                role_id = label_map[role]
                 argument = arg['argument']
                 argument_start_index = arg["argument_start_index"]
                 argument_end_index = argument_start_index + len(argument) -1
@@ -88,11 +85,6 @@ def role_process_bin(input_file, is_predict=False):
                     end_labels[argument_end_index] = role
                 else: 
                     end_labels[argument_end_index] += (" "+ role)
-
-                # if arg['alias']!=[]: print(arg['alias'])
-
-                # arg.pop('alias')
-                # arguments.append(arg)
 
         results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
     return results
@@ -299,4 +291,55 @@ def convert_label_ids_to_onehot(label_ids,label_list):
     return one_hot_labels
 
 
+def get_entities(start_logits, end_logits, attention_mask):
+    batch_size, seq_length, num_labels = start_logits.shape
+    batch_pred_list = []
+    dis = 12
+    for i in range(batch_size):   # batch_index
+        cur_pred_list=[]
+        for j in range(seq_length):  # token_index 
+            if not attention_mask[i, j]: continue
+            # 实体 头
+            for k in range(num_labels):  
+                if start_logits[i][j][k]:
+                    # 寻找 实体尾 
+                    for l in range(j, min(j+ dis, seq_length)):
+                        if end_logits[i][l][k]:
+                            cur_pred_list.append((i, j, l, k)) # index, start, end, label
+                            break
+        batch_pred_list.append(cur_pred_list)
+    return batch_pred_list
+
+def precision_score(labels, preds):
+    nb_correct = 0
+    for label in labels:
+        if label in preds:
+            nb_correct += 1
+            continue
+    nb_pred = len(labels)
+    p = nb_correct / nb_pred if nb_pred > 0 else 0
+    return p
+
+def recall_score(labels, preds):
+    nb_correct = 0
+    for label in labels:
+        if label in preds:
+            nb_correct += 1
+            continue
+    nb_true = len(preds)
+    r = nb_correct / nb_true if nb_true > 0 else 0
+    return r
+
+def f1_score(labels, preds):
+    nb_correct = 0
+    for label in labels:
+        if label in preds:
+            nb_correct += 1
+            continue
+    nb_pred = len(labels)
+    nb_true = len(preds)
+    p = nb_correct / nb_pred if nb_pred > 0 else 0
+    r = nb_correct / nb_true if nb_true > 0 else 0
+    f1 = 2 * p * r / (p + r) if p + r > 0 else 0
+    return f1
 
