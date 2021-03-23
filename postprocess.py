@@ -14,13 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """hello world"""
-import os
-import sys
+
 import json
-import argparse
-from utils import get_labels, write_file
 from seqeval.metrics.sequence_labeling import get_entities
-from collections import defaultdict
+
+from utils import get_labels, write_file
 
 def read_by_lines(path, encoding="utf-8"):
     """read the data by line"""
@@ -75,314 +73,10 @@ def extract_entities(text, labels):
         ret.append([i, text[i:j+1], type])
     return ret
 
-def index_output_bio(test_file, prediction_file, output_file=None):
-    tests = open(test_file, encoding='utf-8').read().splitlines()
-    predictions = open(prediction_file, encoding='utf-8').read().splitlines()
-    results = []
-    index = 0
-    max_length = 256-2
-    for test, prediction in zip(tests, predictions):
-        index += 1
-        test = json.loads(test)
-        tokens = test.pop('tokens')
-        test['text'] = ''.join(tokens)
-        if "labels" in test: test.pop("labels")
 
-        prediction = json.loads(prediction)
-        labels = prediction["labels"]
-        if len(labels)!=len(tokens) and len(labels) != max_length:
-            print(labels, tokens)
-            print(len(labels), len(tokens), index)
-            return False
-        t_ret = extract_entities(test['text'], labels)
-        test["arguments"] = t_ret
-
-        results.append(test)
-    if output_file: write_file(results, output_file)
-    return results
-
-# def index_output_bin_trigger(test_file, prediction_file, output_file):
-#     tests = open(test_file, encoding='utf-8').read().splitlines()
-#     predictions = open(prediction_file, encoding='utf-8').read().splitlines()
-#     results = []
-#     index = 0
-#     for test, prediction in zip(tests, predictions):
-#         index += 1
-#         test = json.loads(test)
-
-#         prediction = json.loads(prediction)
-#         labels = prediction["labels"]
-#         test["labels"] = labels
-
-#         results.append(test)
-#     write_file(results, output_file)
-
-
-def index_output_segment_bin(test_file, prediction_file, output_file):
-    label_list = get_labels(task='role', mode="classification")
-    label_map =  {i: label for i, label in enumerate(label_list)}
-
-    tests = open(test_file, encoding='utf-8').read().splitlines()
-    predictions = open(prediction_file, encoding='utf-8').read().splitlines()
-    results = []
-    index = 0
-    max_length = 256-2
-    for test, prediction in zip(tests, predictions):
-        index += 1
-        test = json.loads(test)
-        start_labels = test.pop('start_labels')
-        end_labels = test.pop('end_labels')
-
-        tokens = test.pop('tokens')
-        text = ''.join(tokens)
-        test['text'] = text
-
-        segment_ids =  test.pop('segment_ids')
-        trigger = ''.join([tokens[i] for i in range(len(tokens)) if segment_ids[i]])
-        for i in range(len(tokens)):
-            if segment_ids[i]:
-                trigger_start_index = i
-                break
-        
-        event = {}
-        # event['trigger'] = trigger
-        # event['trigger_start_index']= trigger_start_index
-        event_type = test.pop("event_type")
-        event["event_type"]=event_type
-
-        prediction = json.loads(prediction)
-        arg_list = prediction["labels"]
-        arguments =[]
-        for arg in arg_list:
-            sub_dict = {}
-            argument_start_index = arg[1] -1 
-            argument_end_index = arg[2] -1 
-            argument = text[argument_start_index:argument_end_index+1]
-            role = label_map[arg[3]]
-            sub_dict["role"]=role
-            sub_dict["argument"]=argument
-            # sub_dict["argument_start_index"] = argument_start_index
-            arguments.append(sub_dict)
-        
-        event["arguments"]= arguments
-
-        test['event_list']= [event]
-        results.append(test)
-    write_file(results, output_file)
-
-def index_output_bin_arg(test_file, prediction_file, output_file):
-    label_list = get_labels(task='role', mode="classification")
-    label_map =  {i: label for i, label in enumerate(label_list)}
-
-    tests = open(test_file, encoding='utf-8').read().splitlines()
-    predictions = open(prediction_file, encoding='utf-8').read().splitlines()
-    results = []
-    index = 0
-    max_length = 256-2
-    for test, prediction in zip(tests, predictions):
-        index += 1
-        test = json.loads(test)
-        start_labels = test.pop('start_labels')
-        end_labels = test.pop('end_labels')
-
-        tokens = test.pop('tokens')
-        text = ''.join(tokens)
-        test['text'] = text
-
-        prediction = json.loads(prediction)
-        arg_list = prediction["labels"]
-        arguments =[]
-        for arg in arg_list:
-            sub_dict = {}
-            argument_start_index = arg[1] -1 
-            argument_end_index = arg[2] -1 
-            argument = text[argument_start_index:argument_end_index+1]
-            role = label_map[arg[3]]
-            sub_dict["role"]=role
-            sub_dict["argument"]=argument
-            sub_dict["argument_start_index"] = argument_start_index
-            arguments.append(sub_dict)
-        
-        test["arguments"]= arguments
-        results.append(test)
-    write_file(results, output_file)
-
-
-# un-finished
-# def binary_to_bio(test_file, prediction_file, output_file):
-#     tests = open(test_file, encoding='utf-8').read().splitlines()
-#     predictions = open(prediction_file, encoding='utf-8').read().splitlines()
-#     results = []
-#     for test,prediction in zip(tests, predictions):
-#         test = json.loads(test)
-#         tokens = test.pop('tokens')
-#         test['text'] = ''.join(tokens)
-
-#         row_preds_list = json.loads(prediction)
-        
-#         labels= ['O']*len(tokens)
-#         # for pred in row_preds_list:
-        
-#         test.update(prediction) 
-
-#         results.append(test)
-#     write_file(results, output_file)
-
-# ner_segment_bi 输入的预处理函数
-
-def convert_bio_to_segment(input_file, output_file):
-    lines = open(input_file, encoding='utf-8').read().splitlines()
-    res = []
-    for line in lines:
-        line = json.loads(line)
-        text = line["text"]
-        labels = line["labels"]
-        tokens = list(text)
-        if len(labels)!=len(tokens):
-            print(len(labels), len(tokens))
-
-        triggers = extract_entities(text, labels)
-        if len(triggers)==0:
-            print("detect no trigger")
-        for _, trigger, event_type in triggers:
-            segment_ids = [0]*(len(tokens))
-            trigger_start_index = trigger['start']
-            trigger_end_index = trigger['start'] + len(trigger['text'])
-            for i in range(trigger_start_index, trigger_end_index):
-                segment_ids[i] = 1
-            start_labels = ['O']*(len(tokens))
-            end_labels =  ['O']*(len(tokens))
-
-            cur_line = {}
-            cur_line["id"] = line["id"]
-            cur_line["tokens"] = tokens
-            cur_line["event_type"] = event_type
-            cur_line["segment_ids"] = segment_ids
-            cur_line["start_labels"] = start_labels
-            cur_line["end_labels"] = end_labels
-            res.append(cur_line)
-    write_file(res, output_file)
-
-
-def convert_bio_to_label(input_file, output_file):
-    lines = open(input_file, encoding='utf-8').read().splitlines()
-    res = []
-    for line in lines:
-        line_json = json.loads(line)
-        labels = []
-        for label in line_json["labels"]:
-            if label.startswith("B-") and label[2:] not in labels:
-                labels.append(label[2:])
-        res.append({"labels":labels})
-    write_file(res, output_file)
-
-def compute_matric(label_file, pred_file):
-    label_lines = open(label_file, encoding='utf-8').read().splitlines()
-    pred_lines = open(pred_file, encoding='utf-8').read().splitlines()
-
-    labels = []
-    for i, line in enumerate(label_lines):
-        json_line = json.loads(line)
-        for label in json_line['labels']:
-            labels.append([i, label])
-    
-    preds = []
-    for i, line in enumerate(pred_lines):
-        json_line = json.loads(line)
-        for label in json_line['labels']:
-            preds.append([i, label])
-
-    nb_correct  = 0
-    for out_label in labels:
-        if out_label in preds:
-            nb_correct += 1
-            continue
-    nb_pred = len(preds)
-    nb_true = len(labels)
-    # print(nb_correct, nb_pred, nb_true)
-
-    p = nb_correct / nb_pred if nb_pred > 0 else 0
-    r = nb_correct / nb_true if nb_true > 0 else 0
-    f1 = 2 * p * r / (p + r) if p + r > 0 else 0
-    
-    print(p, r, f1)
-
-def data_process(path, model="trigger", is_predict=False):
-    """data_process"""
-
-    def label_data(data, start, l, _type):
-        """label_data"""
-        for i in range(start, start + l):
-            suffix = u"B-" if i == start else u"I-"
-            data[i] = u"{}{}".format(suffix, _type)
-        return data
-
-    sentences = []
-    output = [u"text_a"] if is_predict else [u"text_a\tlabel"]
-    with open(path) as f:
-        for line in f:
-            d_json = json.loads(line.strip().decode("utf-8"))
-            _id = d_json["id"]
-            text_a = [
-                u"，" if t == u" " or t == u"\n" or t == u"\t" else t
-                for t in list(d_json["text"].lower())
-            ]
-            if is_predict:
-                sentences.append({"text": d_json["text"], "id": _id})
-                output.append(u'\002'.join(text_a))
-            else:
-                if model == u"trigger":
-                    labels = [u"O"] * len(text_a)
-                    for event in d_json["event_list"]:
-                        event_type = event["event_type"]
-                        start = event["trigger_start_index"]
-                        trigger = event["trigger"]
-                        labels = label_data(labels, start,
-                                            len(trigger), event_type)
-                    output.append(u"{}\t{}".format(u'\002'.join(text_a),
-                                                   u'\002'.join(labels)))
-                elif model == u"role":
-                    for event in d_json["event_list"]:
-                        labels = [u"O"] * len(text_a)
-                        for arg in event["arguments"]:
-                            role_type = arg["role"]
-                            argument = arg["argument"]
-                            start = arg["argument_start_index"]
-                            labels = label_data(labels, start,
-                                                len(argument), role_type)
-                        output.append(u"{}\t{}".format(u'\002'.join(text_a),
-                                                       u'\002'.join(labels)))
-    if is_predict:
-        return sentences, output
-    else:
-        return output
-
-
-def schema_process(path, model="trigger"):
-    """schema_process"""
-
-    def label_add(labels, _type):
-        """label_add"""
-        if u"B-{}".format(_type) not in labels:
-            labels.extend([u"B-{}".format(_type), u"I-{}".format(_type)])
-        return labels
-
-    labels = []
-    with open(path) as f:
-        for line in f:
-            d_json = json.loads(line.strip().decode("utf-8"))
-            if model == u"trigger":
-                labels = label_add(labels, d_json["event_type"])
-            elif model == u"role":
-                for role in d_json["role_list"]:
-                    labels = label_add(labels, role["role"])
-    labels.append(u"O")
-    return labels
-
-
-## trigger-bio + role-bio
-def predict_data_process(test_file, trigger_file, role_file, schema_file, save_path):
-    """predict_data_process"""
+## trigger-bio + role-bio: 输出为lic2020文件形式
+def predict_data_process_bio2(test_file, trigger_file, role_file, schema_file, save_path):
+    """predict_data_process_bio"""
     pred_ret = []
     test_datas = read_by_lines(test_file)
     trigger_datas = read_by_lines(trigger_file)
@@ -397,8 +91,7 @@ def predict_data_process(test_file, trigger_file, role_file, schema_file, save_p
     for test_data, role_data in zip(test_datas, role_datas):
         # arguments = json.loads(data)["arguments"]
         test_data = json.loads(test_data)
-        tokens = test_data['tokens']
-        text = ''.join(tokens)
+        text = test_data['text']
         labels = json.loads(role_data)['labels']
         arguments = extract_entities(text, labels)
         sent_role_mapping[test_data["id"]] = arguments
@@ -406,8 +99,54 @@ def predict_data_process(test_file, trigger_file, role_file, schema_file, save_p
     for test_data, trigger_data in zip(test_datas, trigger_datas):
         # arguments = json.loads(data)["arguments"]
         test_data = json.loads(test_data)
-        tokens = test_data['tokens']
-        text = ''.join(tokens)
+        text = test_data['text']
+        labels = json.loads(trigger_data)['labels']
+        triggers = extract_entities(text, labels)
+        event_list = []
+        for trigger_start_index, trigger, event_type in triggers:
+            role_list = schema[event_type]
+            arguments = []
+            for arg_start_index, arg, role_type in sent_role_mapping[test_data["id"]]:
+                if role_type not in role_list:
+                    continue
+                if len(arg) == 1: continue
+                arguments.append({"role": role_type, "argument_start_index":arg_start_index, "argument": arg})
+            event = {"event_type": event_type, "trigger_start_index":trigger_start_index, "trigger":trigger, "arguments": arguments}
+            event_list.append(event)
+        pred_ret.append({
+            "id": test_data["id"],
+            "text": text,
+            "event_list": event_list
+        })
+    pred_ret = [json.dumps(r, ensure_ascii=False) for r in pred_ret]
+    write_by_lines(save_path, pred_ret)
+
+## trigger-bio + role-bio: 输出为ccks2020文件形式
+def predict_data_process_bio(test_file, trigger_file, role_file, schema_file, save_path):
+    """predict_data_process_bio"""
+    pred_ret = []
+    test_datas = read_by_lines(test_file)
+    trigger_datas = read_by_lines(trigger_file)
+    role_datas = read_by_lines(role_file)
+    schema_datas = read_by_lines(schema_file)
+    schema = {}
+    for s in schema_datas:
+        s = json.loads(s)
+        schema[s["event_type"]] = [r["role"] for r in s["role_list"]]
+    # 将role数据进行处理
+    sent_role_mapping = {}
+    for test_data, role_data in zip(test_datas, role_datas):
+        # arguments = json.loads(data)["arguments"]
+        test_data = json.loads(test_data)
+        text = test_data['content']
+        labels = json.loads(role_data)['labels']
+        arguments = extract_entities(text, labels)
+        sent_role_mapping[test_data["id"]] = arguments
+
+    for test_data, trigger_data in zip(test_datas, trigger_datas):
+        # arguments = json.loads(data)["arguments"]
+        test_data = json.loads(test_data)
+        text = test_data['content']
         labels = json.loads(trigger_data)['labels']
         triggers = extract_entities(text, labels)
         event_list = []
@@ -423,7 +162,7 @@ def predict_data_process(test_file, trigger_file, role_file, schema_file, save_p
             event_list.append(event)
         pred_ret.append({
             "id": test_data["id"],
-            "text": text,
+            "content": text,
             "events": event_list
         })
     pred_ret = [json.dumps(r, ensure_ascii=False) for r in pred_ret]
@@ -454,51 +193,13 @@ def ensemble(input_file, output_file):
     write_file(res, output_file)
 
 
-# def merge(label_file, ):
-
-
 if __name__ == "__main__":
-
-   
-    # index_output_segment_bin("./data/role_segment_bin/dev.json" , "./output/role_segment_bin/checkpoint-best/eval_predictions.json","./output/role_segment_bin/checkpoint-best/eval_predictions_indexed.json" )
-    # index_output_segment_bin("./data/role_segment_bin/test.json" , "./output/role_segment_bin/checkpoint-best/test_predictions.json","./output/role_segment_bin/checkpoint-best/test_predictions_indexed.json" )
-
-   
-    # convert_bio_to_segment("./output/trigger/checkpoint-best/test_predictions_indexed.json",\
-    #     "./output/trigger/checkpoint-best/test_predictions_indexed_semgent_id.json")
-
-    # convert_bio_to_label("./output/trigger/checkpoint-best/eval_predictions.json",\
-    #      "./output/trigger/checkpoint-best/eval_predictions_labels.json")
-    # compute_matric("./data/trigger_classify/dev.json", "./output/trigger/checkpoint-best/eval_predictions_labels.json")
-
-
-    predict_data_process(
-        test_file = "./data/FewFC-main/trigger_trans/test.json",
-        trigger_file= "./output/trigger_trans/0/checkpoint-best/test_predictions.json", \
-        role_file = "./output/role_trans/0/checkpoint-best/test_predictions.json", \
+    predict_data_process_bio(
+        test_file = "./data/FewFC-main/rearranged/trans/0/test.json",
+        trigger_file= "./output/trigger_trans2/0/checkpoint-best/test_predictions.json", \
+        role_file = "./output/role_trans2/0/checkpoint-best/test_predictions.json", \
         schema_file = "./data/event_schema.json", \
-        save_path =  "./result/test_trans.json")
-
-    # predict_data_process_bio_bin(
-    #     trigger_file= "./output/trigger_base/0/checkpoint-best/eval_predictions_indexed.json", \
-    #     role_file = "./output/role_base/0/checkpoint-best/eval_predictions_indexed.json", \
-    #     schema_file = "./data/event_schema.json", \
-    #     save_path =  "./results/eval_base.json")
-    # predict_data_process_bio_bin(
-    #     trigger_file= "./output/trigger_base/0/checkpoint-best/test_predictions_indexed.json", \
-    #     role_file = "./output/role_base/0/checkpoint-best/test_predictions_indexed.json", \
-    #     schema_file = "./data/event_schema.json", \
-    #     save_path =  "./results/test_base.json")
-    # predict_data_process_bio_bin(
-    #     trigger_file= "./output/trigger_all/0/checkpoint-best/test_predictions_indexed.json", \
-    #     role_file = "./output/role_all/0/checkpoint-best/test_predictions_indexed.json", \
-    #     schema_file = "./data/event_schema.json", \
-    #     save_path =  "./results/test_trans2.json")
-    # predict_data_process_bio_bin(
-    #     trigger_file= "./output/trigger_trans/checkpoint-best/test_predictions_indexed.json", \
-    #     role_file = "./output/role_trans2/checkpoint-best/test_predictions_indexed.json", \
-    #     schema_file = "./data/event_schema copy.json", \
-    #     save_path =  "./results/test_trans5.json")
+        save_path =  "./result/test_trans2.json")
 
     # predict_data_process_bin(
     #     trigger_file= "./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json", \

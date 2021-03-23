@@ -44,7 +44,66 @@ class InputExample(object):
         self.role_start_labels = role_start_labels
         self.role_end_labels = role_end_labels
 
+## ccks格式
 def data_process_bin(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        
+        if is_predict:
+            results.append({"id":row["id"], "tokens":list(row["content"]), "segment_ids": [0] * len(row["text"]), \
+              "trigger_start_labels":['O']*len(row["text"]), "trigger_end_labels":['O']*len(row["text"]), \
+              "role_start_labels":['O']*len(row["text"]), "role_end_labels":['O']*len(row["text"])})
+            continue
+        
+        # role
+        for event in row["events"]:
+            event_type = event["type"]
+            segment_ids= [0] * len(row["content"])
+            trigger_start_labels = ['O']*len(row["content"]) 
+            trigger_end_labels = ['O']*len(row["content"]) 
+            role_start_labels = ['O']*len(row["content"]) 
+            role_end_labels = ['O']*len(row["content"]) 
+            for arg in event["mentions"]:
+                role = arg['role']
+                # trigger
+                if role=="trigger":
+                    trigger_start_index, trigger_end_index = arg["span"]
+                    trigger_end_index -= 1
+                    if trigger_start_labels[trigger_start_index]=="O":
+                        trigger_start_labels[trigger_start_index] = event_type
+                    else: 
+                        trigger_start_labels[trigger_start_index] += (" "+ event_type)
+                    if trigger_end_labels[trigger_end_index]=="O":
+                        trigger_end_labels[trigger_end_index] = event_type
+                    else: 
+                        trigger_end_labels[trigger_end_index] += (" "+ event_type)
+                    for i in range(trigger_start_index, trigger_end_index+1):
+                        segment_ids[i] = 1
+                    continue
+
+                # role
+                argument_start_index, argument_end_index = arg["span"]
+                argument_end_index -= 1
+                if role_start_labels[argument_start_index]=="O":
+                    role_start_labels[argument_start_index] = role
+                else: 
+                    role_start_labels[argument_start_index] += (" "+ role)
+                    
+                if role_end_labels[argument_end_index]=="O":
+                    role_end_labels[argument_end_index] = role
+                else: 
+                    role_end_labels[argument_end_index] += (" "+ role)
+
+            results.append({"id":row["id"], "words":list(row["content"]), "segment_ids":segment_ids, \
+                "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
+                    "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
+    return results
+
+# lic格式
+def data_process_bin2(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -106,7 +165,7 @@ def data_process_bin(input_file, is_predict=False):
             results.append({"id":row["id"], "words":list(row["text"]), "segment_ids":segment_ids, \
                 "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
                     "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
-        return results
+    return results
 
 class InputFeatures(object):
     """A single set of features of data."""
@@ -125,7 +184,7 @@ class InputFeatures(object):
 
 def read_examples_from_file(data_dir, mode):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
-    items = data_process_bin(file_path, mode=='test')
+    items = data_process_bin(file_path, mode!='train')
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(
@@ -176,10 +235,7 @@ def convert_examples_to_features(
             in zip(example.words,  example.segment_ids, \
                 example.trigger_start_labels, example.trigger_end_labels, \
                 example.role_start_labels, example.role_end_labels):
-
             word_tokens = tokenizer.tokenize(word)
-
-            tokens.extend(word_tokens)
             if len(word_tokens)==1:
                 tokens.extend(word_tokens)
             if len(word_tokens)>1: 
@@ -352,7 +408,6 @@ def convert_label_ids_to_onehot(label_ids, label_list):
             if sub_label_id not in [ignore_index, non_index]:
                 one_hot_labels[i][sub_label_id]= 1
     return one_hot_labels
-
 
 
 

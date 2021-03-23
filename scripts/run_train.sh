@@ -1,10 +1,11 @@
 MAX_LENGTH=256
 TASK=role
+DOMAIN=trans
 MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
 # MODEL=./output/trigger_base/0/
-DATA_DIR=./data/FewFC-main/all/1/
-SCHEMA=./data/event_schema/all.json
-OUTPUT_DIR=./output/role_all_bin/1/
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/0/
+SCHEMA=./data/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/temp/
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=45
@@ -14,9 +15,8 @@ WARMUP_STEPS=100
 SEED=1
 LR=3e-5
 
-# CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
-# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_bi_ner.py \
-CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
+# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_bi_ner_joint.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner_joint.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \

@@ -162,15 +162,12 @@ def F1Score(truemap, predmap):
     return f1score
 
 
-def main(_):
+def compute_metric(truefile,predfile):
     '''
     测试时的入口函数，确定脚本的输入和输出后，可作修改
     :param _:
     :return:
     '''
-    truefile = "./data/FewFC-main/original/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
-    # noisedfile = "noised.json"
-    predfile = "./result/test_trans.json"
     truemap = readjson(truefile)
     predmap = readjson(predfile)
     ids = list(predmap.keys())
@@ -182,9 +179,14 @@ def main(_):
     starttime = time.time()
     f1score = F1Score(truemap, predmap)
     endtime = time.time()
-    print('spend time is {d}'.format(d=endtime - starttime))
-    print(f1score)
+    # print('spend time is {d}'.format(d=endtime - starttime))
+    # print(f1score)
+    return f1score
 
 
 if __name__ == "__main__":
-    app.run(main)
+    truefile = "./data/FewFC-main/original/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
+    # noisedfile = "noised.json"
+    predfile = "./result/test_trans2.json"
+    metric = compute_metric(truefile, predfile)
+    print(metric)

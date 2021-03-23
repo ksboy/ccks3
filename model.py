@@ -219,119 +219,6 @@ class BertForTokenClassificationWithDiceLoss(BertPreTrainedModel):
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
 
-class BertForTokenClassificationWithTrigger(BertPreTrainedModel):
-    def __init__(self, config):
-        super().__init__(config)
-        self.num_labels = config.num_labels
-
-        self.bert = BertModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-
-        self.init_weights()
-
-    # @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING)
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-    ):
-        r"""
-        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
-            Labels for computing the token classification loss.
-            Indices should be in ``[0, ..., config.num_labels - 1]``.
-
-    Returns:
-        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
-        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when ``labels`` is provided) :
-            Classification loss.
-        scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.num_labels)`)
-            Classification scores (before SoftMax).
-        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
-            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
-            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
-        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
-            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
-            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-
-    Examples::
-
-        from transformers import BertTokenizer, BertForTokenClassification
-        import torch
-
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        model = BertForTokenClassification.from_pretrained('bert-base-uncased')
-
-        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
-        labels = torch.tensor([1] * input_ids.size(1)).unsqueeze(0)  # Batch size 1
-        outputs = model(input_ids, labels=labels)
-
-        loss, scores = outputs[:2]
-
-        """
-
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            # token_type_ids=token_type_ids,
-            token_type_ids= torch.zeros_like(token_type_ids),
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-        )
-
-        sequence_output = outputs[0]
-
-        # add triggrt embedding
-        for i in range(sequence_output.size(0)):
-            trigger_output=[]
-            for j in range(sequence_output.size(1)):
-                if token_type_ids[i][j]:
-                    trigger_output.append(sequence_output[i][j])
-            trigger_output = torch.stack(trigger_output,dim=0)
-            trigger_output = torch.mean(trigger_output,dim=0)
-            sequence_output[i] += trigger_output
-
-        sequence_output = self.dropout(sequence_output)
-        logits = self.classifier(sequence_output)
-
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
-        if labels is not None:
-            
-            loss_fct = CrossEntropyLoss()
-            # loss_fct = FocalLoss()
-            # loss_fct = DiceLoss()
-            # loss_fct = DSCLoss()
-            # loss_fct= LabelSmoothingCrossEntropy()
-
-            # Only keep active parts of the loss
-            if attention_mask is not None:
-                active_loss = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = torch.where(
-                    active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
-                )
-                # print(active_loss, active_loss.shape, \
-                #      active_logits,active_logits.shape,\
-                #      active_labels,active_labels.shape,\
-                #      labels, labels.shape)
-                #2048 2048*435 2048 8*256 
-                loss = loss_fct(active_logits, active_labels)
-            else:
-                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            outputs = (loss,) + outputs
-
-        return outputs  # (loss), scores, (hidden_states), (attentions)
 
 from utils_bi_ner import get_entities
 class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
@@ -416,9 +303,9 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
 
         #######################################################
         ## trigger
-        sequence_output_trigger = self.dropout(sequence_output)
-        trigger_start_logits = self.trigger_start_classifier(sequence_output_trigger)
-        trigger_end_logits = self.trigger_end_classifier(sequence_output_trigger)
+        # sequence_output = self.dropout(sequence_output)
+        trigger_start_logits = self.trigger_start_classifier(sequence_output)
+        trigger_end_logits = self.trigger_end_classifier(sequence_output)
 
         if trigger_start_labels is not None and trigger_end_labels is not None:
             # loss_fct = CrossEntropyLoss()
@@ -449,18 +336,14 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
         #######################################################
         ## role
         # add trigger embedding
-        for i in range(sequence_output.size(0)):
-            trigger_output=[]
-            for j in range(sequence_output.size(1)):
-                if token_type_ids[i][j]:
-                    trigger_output.append(sequence_output[i][j])
-            trigger_output = torch.stack(trigger_output,dim=0)
-            trigger_output = torch.mean(trigger_output,dim=0)
-            sequence_output[i] += trigger_output
+        batch_size, sequence_length, hidden_size = sequence_output.shape
+        mask = token_type_ids.unsqueeze(-1).expand_as(sequence_output).bool()
+        trigger_embedding = torch.sum(sequence_output * mask, dim=1) / torch.sum(mask, dim=1)
+        context_embedding = sequence_output + trigger_embedding.unsqueeze(1)
         
         # sequence_output_role = self.dropout(sequence_output)
-        role_start_logits = self.role_start_classifier(sequence_output)
-        role_end_logits = self.role_end_classifier(sequence_output)
+        role_start_logits = self.role_start_classifier(context_embedding)
+        role_end_logits = self.role_end_classifier(context_embedding)
 
         if role_start_labels is not None and role_end_labels is not None:
             # loss_fct = CrossEntropyLoss()
@@ -492,23 +375,18 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
-    def get_context_embedding(self, trigger_list, sequence_output):
-        context_embeddings = []
-        for trigger_data in trigger_list:
-            i, start, end, label = trigger_data
-            #######################################################
-            ## role
-            # add trigger embedding
-            for i in range(sequence_output.size(0)):
-                trigger_output=[]
-                for j in range(start, end+1):
-                        trigger_output.append(sequence_output[i][j])
-                trigger_output = torch.stack(trigger_output,dim=0)
-                trigger_output = torch.mean(trigger_output,dim=0)
-            context_embeddings.append(sequence_output[i] + trigger_output)
-        return context_embeddings
+    def add_trigger_embedding(self, trigger, context_embedding):
+        # add trigger embedding
+        _, start, end, label = trigger
+        trigger_embedding = []
+        for j in range(start, end+1):
+            trigger_embedding.append(context_embedding[j])
+        trigger_embedding = torch.stack(trigger_embedding,dim=0)
+        trigger_embedding = torch.mean(trigger_embedding,dim=0)
+        context_embedding += trigger_embedding
+        return context_embedding
         
-    def predict_trigger(self, sequence_output, attention_mask):
+    def predict_trigger(self, sequence_output):
         #######################################################
         ## trigger
         # sequence_output_trigger = self.dropout(sequence_output)
@@ -519,20 +397,21 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
         trigger_start_logits = torch.sigmoid(trigger_start_logits)> threshold # 1498*256*217
         trigger_end_logits = torch.sigmoid(trigger_end_logits) > threshold
         # 64*256*65
-        batch_trigger_list = get_entities(trigger_start_logits, trigger_end_logits, attention_mask)
-        return batch_trigger_list
+        trigger_list = get_entities(trigger_start_logits.cpu().numpy(), trigger_end_logits.cpu().numpy())[0]
+        return trigger_list
 
-    def predict_role(self, trigger_list, sequence_output, attention_mask):     
-        context_embeddings = self.get_context_embedding(trigger_list, sequence_output)
-        role_start_logits = self.role_start_classifier(context_embeddings)
-        role_end_logits = self.role_end_classifier(context_embeddings)
+    def predict_role(self, trigger, sequence_output):     
+        context_embedding = self.add_trigger_embedding(trigger, sequence_output[0]).unsqueeze(0)
+
+        role_start_logits = self.role_start_classifier(context_embedding)
+        role_end_logits = self.role_end_classifier(context_embedding)
         
         threshold = 0.5
         role_start_logits = torch.sigmoid(role_start_logits)> threshold # 1498*256*217
         role_end_logits = torch.sigmoid(role_end_logits) > threshold
 
-        batch_role_list = get_entities(role_start_logits, role_end_logits, attention_mask)
-        return batch_role_list
+        role_list = get_entities(role_start_logits.cpu().numpy(), role_end_logits.cpu().numpy())[0]
+        return role_list
 
     def predict(
         self,
@@ -556,10 +435,11 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
         outputs = outputs[2:]
 
         result = []
-        batch_trigger_list = self.predict_trigger(sequence_output, attention_mask)
-        for trigger_list in batch_trigger_list:
-            batch_role_list = self.predict_role(trigger_list, sequence_output, attention_mask)
-            result.append(batch_role_list)
+        trigger_list = self.predict_trigger(sequence_output)[:10]
+        for trigger in trigger_list:
+            role_list = self.predict_role(trigger, sequence_output)
+            role_list = [trigger] + role_list[:10]
+            result.append(role_list)
         return result  # (loss), scores, (hidden_states), (attentions)
 
 
@@ -681,136 +561,6 @@ class BertForTokenBinaryClassification(BertPreTrainedModel):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
-class BertForTokenBinaryClassificationWithTrigger(BertPreTrainedModel):
-    def __init__(self, config):
-        super().__init__(config)
-        self.num_labels = config.num_labels
-
-        self.bert = BertModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.start_classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.end_classifier = nn.Linear(config.hidden_size, config.num_labels)
-
-        self.init_weights()
-
-    # @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING)
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        start_labels=None, # batch* num_class* seq_length
-        end_labels=None,
-    ):
-        r"""
-        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
-            Labels for computing the token classification loss.
-            Indices should be in ``[0, ..., config.num_labels - 1]``.
-
-    Returns:
-        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
-        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when ``labels`` is provided) :
-            Classification loss.
-        scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.num_labels)`)
-            Classification scores (before SoftMax).
-        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
-            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
-            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
-        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
-            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
-            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-
-    Examples::
-
-        from transformers import BertTokenizer, BertForTokenClassification
-        import torch
-
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        model = BertForTokenClassification.from_pretrained('bert-base-uncased')
-
-        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
-        labels = torch.tensor([1] * input_ids.size(1)).unsqueeze(0)  # Batch size 1
-        outputs = model(input_ids, labels=labels)
-
-        loss, scores = outputs[:2]
-
-        """
-
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            # token_type_ids=torch.zeros_like(token_type_ids),
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-        )
-
-        sequence_output = outputs[0]
-
-        # # add triggrt embedding
-        # for i in range(sequence_output.size(0)):
-        #     trigger_output=[]
-        #     for j in range(sequence_output.size(1)):
-        #         if token_type_ids[i][j]:
-        #             trigger_output.append(sequence_output[i][j])
-        #     if trigger_output==[]: 
-        #         print("segment_id == none")
-        #         continue
-        #     trigger_output = torch.stack(trigger_output,dim=0)
-        #     trigger_output = torch.mean(trigger_output,dim=0)
-        #     sequence_output[i] += trigger_output
-
-        sequence_output = self.dropout(sequence_output)
-
-        start_logits = self.start_classifier(sequence_output)
-        end_logits = self.end_classifier(sequence_output)
-
-        outputs = ([start_logits, end_logits],) + outputs[2:]  # add hidden states and attention if they are here
-        if start_labels is not None and end_labels is not None:
-            # loss_fct = CrossEntropyLoss()
-            # loss_fct = FocalLoss(class_num=self.num_labels)
-            loss_fct = BCEWithLogitsLoss(reduction="none")
-            # Only keep active parts of the loss
-            if attention_mask is not None:
-                active_loss = attention_mask.view(-1) == 1
-                active_start_logits = start_logits.view(-1, self.num_labels)
-                active_end_logits = end_logits.view(-1, self.num_labels)
-
-                active_start_labels = start_labels.view(-1, self.num_labels)
-                active_end_labels = end_labels.view(-1, self.num_labels)
-                # attention_mask: 
-                # ignore_index: [cls], [sep]
-                # non_index: no label
-
-                # print(active_loss, active_loss.shape, \
-                #      active_logits,active_logits.shape,\
-                #      active_labels,active_labels.shape,\
-                #      labels, labels.shape)
-                #2048 2048*435 2048 8*256 
-                start_loss = loss_fct(active_start_logits, active_start_labels.float())
-                start_loss = start_loss * (active_loss.unsqueeze(-1))
-                start_loss = torch.sum(start_loss)/torch.sum(active_loss)
-
-                end_loss = loss_fct(active_end_logits, active_end_labels.float())
-                end_loss = end_loss * (active_loss.unsqueeze(-1))
-                end_loss = torch.sum(end_loss)/torch.sum(active_loss)
-
-
-            else:
-                start_loss = loss_fct(start_logits.view(-1, self.num_labels), start_labels.view(-1))
-                end_loss = loss_fct(end_logits.view(-1, self.num_labels), end_labels.view(-1))
-            outputs = (start_loss+ end_loss,) + () + outputs
-
-        return outputs  # (loss), scores, (hidden_states), (attentions)
 
 class BertForTokenBinaryClassificationWithTriggerAndEventType(BertPreTrainedModel):
     def __init__(self, config):

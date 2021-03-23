@@ -21,6 +21,7 @@ import glob
 import logging
 import os
 import random
+import json
 
 import numpy as np
 import torch
@@ -53,14 +54,10 @@ from transformers import (
     XLMRobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenClassificationWithDiceLoss, BertForTokenClassificationWithTrigger, \
-    BertForTokenBinaryClassification, BertForTokenBinaryClassificationJoint
-from utils import get_labels
+from model import BertForTokenBinaryClassificationJoint
+from utils import get_labels, write_file, OurBertTokenizer
 from utils_bi_ner_joint import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
-from utils_ner import  get_entities, f1_score, precision_score, recall_score
-# from utils_ner import convert_examples_to_features, get_labels, read_examples_from_file
-from utils import write_file
-
+from metrics import compute_metric
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
@@ -97,7 +94,7 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pad_token_label_id):
+def train(args, train_dataset, model, tokenizer, eval_tokenizer, trigger_labels, role_labels):
     """ Train the model """
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(log_dir=args.output_dir)
@@ -244,7 +241,7 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="dev")
+                        results = evaluate(args, model, eval_tokenizer, trigger_labels, role_labels, mode="dev")
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
@@ -300,53 +297,76 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode, prefix=""):
-    eval_dataset = load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode=mode)
+def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix=""):
+    # eval_dataset = load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode=mode)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    # Note that DistributedSampler samples randomly
-    eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
+    # # Note that DistributedSampler samples randomly
+    # eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
+    # eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
     # multi-gpu evaluate
     # fix the bug when using mult-gpu during evaluating
     if args.n_gpu > 1 and not isinstance(model, torch.nn.DataParallel):
         model = torch.nn.DataParallel(model)
-
+    
+    file_path = os.path.join(args.data_dir, "{}.json".format(mode))
+    rows = open(file_path, encoding='utf-8').read().splitlines()
     # Eval!
     logger.info("***** Running evaluation %s *****", prefix)
-    logger.info("  Num examples = %d", len(eval_dataset))
+    logger.info("  Num examples = %d", len(rows))
     logger.info("  Batch size = %d", args.eval_batch_size)
-    results = []
     model.eval()
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
-        batch = tuple(t.to(args.device) for t in batch)
 
-        with torch.no_grad():
-            inputs = {"input_ids": batch[0], "attention_mask": batch[1], \
-                "trigger_start_labels": batch[3], "trigger_end_labels": batch[4], \
-                "role_start_labels": batch[5], "role_end_labels": batch[6]}
-            if args.model_type != "distilbert":
-                inputs["token_type_ids"] = (
-                    batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
-            outputs = model.predict(**inputs)
-            results.extend(outputs)
+    with torch.no_grad():
+        results = []
+        for row in  tqdm(rows, mode):
+            if not row or row == '\n': continue
+            data = json.loads(row)
+            data["events"] = []
+            text = data['content']
+            tokens = tokenizer.tokenize(text)
+
+            token_ids = tokenizer.convert_tokens_to_ids(tokens)
+            token_ids = torch.Tensor([token_ids]).long().to(args.device)
+            preds = model.predict(token_ids)
+            events = []
+            for pred in preds:
+                trigger_data = pred[0]
+                role_data_list = pred[1:]
+                _, trigger_start_index, trigger_end_index, event_type_id = trigger_data
+                # 考虑 [CLS]
+                trigger_start_index -= 1
+                trigger_end_index -= 1 
+                trigger = text[trigger_start_index: trigger_end_index+1]
+                event_type = trigger_labels[event_type_id]
+                arguments = [{"role": "trigger","span":[trigger_start_index, trigger_start_index+1], "word": trigger}]
+                for role_data in role_data_list:
+                    _, argument_start_index, argument_end_index, role_id = role_data
+                    argument_start_index -= 1
+                    argument_end_index -= 1
+                    argument = text[argument_start_index:argument_end_index+1]
+                    role = role_labels[role_id]
+                    arguments.append({"word": argument, "span": [argument_start_index, argument_end_index+1], "role": role})
+                events.append({ "type": event_type, "mentions":arguments })
+            results.append({'id':data['id'], "events":events})
     
-    outputs = 
-    
+    output_dir = os.path.join(args.output_dir, "checkpoint-best")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    eval_predictions_file = os.path.join(output_dir, "eval_predictions.json") if mode=='dev' else \
+        os.path.join(output_dir, "test_predictions.json")
+    write_file(results, eval_predictions_file) 
 
     results = {
-        "precision":  precision_score(out_label_list, outputs),
-        "recall": recall_score(out_label_list, outputs),
-        "f1":  f1_score(out_label_list, outputs),
+        "f1":  compute_metric(file_path, eval_predictions_file),
     }
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
     
-    return results, batch_preds_list
+    return results
 
 
 def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode):
@@ -645,6 +665,11 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         **tokenizer_args,
     )
+    eval_tokenizer = OurBertTokenizer.from_pretrained(
+        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
+        cache_dir=args.cache_dir if args.cache_dir else None,
+        **tokenizer_args,
+    )
     model = model_class.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
@@ -674,7 +699,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="train")
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pad_token_label_id)
+        global_step, tr_loss = train(args, train_dataset, model, tokenizer, eval_tokenizer, trigger_labels, role_labels)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
@@ -697,7 +722,7 @@ def main():
 
     # Evaluation
     if args.do_eval and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, **tokenizer_args)
+        tokenizer = OurBertTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
         checkpoints = [os.path.join(args.output_dir, 'checkpoint-best')]
         if args.eval_all_checkpoints:
             checkpoints = list(
@@ -708,39 +733,26 @@ def main():
         for checkpoint in checkpoints:
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result, predictions = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="dev", prefix=checkpoint)
+            result = evaluate(args, model, tokenizer, trigger_labels, role_labels, mode="dev", prefix=checkpoint)
             # Save results
             output_eval_results_file = os.path.join(checkpoint, "eval_results.txt")
             with open(output_eval_results_file, "w") as writer:
                 for key in sorted(result.keys()):
                     writer.write("{} = {}\n".format(key, str(result[key])))
-            # Save predictions
-            output_eval_predictions_file = os.path.join(checkpoint, "eval_predictions.json")
-            results = []
-            for prediction in predictions:
-                results.append({'labels':prediction})
-            write_file(results, output_eval_predictions_file)  
 
 
     if args.do_predict and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, **tokenizer_args)
+        tokenizer = OurBertTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
         checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
         model = model_class.from_pretrained(checkpoint)
         model.to(args.device)
-        result, predictions = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="test")
+        result = evaluate(args, model, tokenizer, trigger_labels, role_labels, mode="test")
         # Save results
         output_test_results_file = os.path.join(checkpoint, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
             for key in sorted(result.keys()):
                 writer.write("{} = {}\n".format(key, str(result[key])))
-        # Save predictions
-        output_test_predictions_file = os.path.join(checkpoint, "test_predictions.json")
-        results = []
-        for prediction in predictions:
-            results.append({'labels':prediction})
-        write_file(results,output_test_predictions_file)      
 
-    return results
 
 
 if __name__ == "__main__":

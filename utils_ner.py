@@ -49,7 +49,8 @@ class InputFeatures(object):
         self.segment_ids = segment_ids
         self.label_ids = label_ids
 
-def trigger_process_bio(input_file, is_predict=False):
+## lic 格式
+def trigger_process_bio2(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -71,7 +72,34 @@ def trigger_process_bio(input_file, is_predict=False):
     # write_file(results,output_file)
     return results
 
-def role_process_bio(input_file, is_predict=False):
+## ccks格式
+def trigger_process_bio(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        labels = ['O']*len(row["content"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["content"]), "labels":labels})
+            continue
+        for event in row["events"]:
+            event_type = event["type"]
+            for mention in event["mentions"]:
+                if mention["role"]=="trigger":
+                    trigger = mention["word"]
+                    trigger_start_index, trigger_end_index = mention["span"]
+                    labels[trigger_start_index]= "B-{}".format(event_type)
+                    for i in range(trigger_start_index+1, trigger_end_index):
+                        labels[i]= "I-{}".format(event_type)
+                        # labels[i]= "I-{}".format("触发词")
+                    break
+        results.append({"id":row["id"], "words":list(row["content"]), "labels":labels})
+    # write_file(results,output_file)
+    return results
+
+## lic格式
+def role_process_bio2(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -82,7 +110,6 @@ def role_process_bio(input_file, is_predict=False):
             results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
             continue
         for event in row["event_list"]:
-            event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
                 argument = arg['argument']
@@ -95,6 +122,29 @@ def role_process_bio(input_file, is_predict=False):
     # write_file(results,output_file)
     return results
 
+## ccks格式
+def role_process_bio(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        labels = ['O']*len(row["content"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["content"]), "labels":labels})
+            continue
+        for event in row["events"]:
+            for arg in event["mentions"]:
+                role = arg['role']
+                if role=="trigger": continue
+                argument_start_index, argument_end_index = arg["span"]
+                labels[argument_start_index]= "B-{}".format(role)
+                for i in range(argument_start_index+1, argument_end_index):
+                    labels[i]= "I-{}".format(role)
+                # if arg['alias']!=[]: print(arg['alias'])
+        results.append({"id":row["id"], "words":list(row["content"]), "labels":labels})
+    # write_file(results,output_file)
+    return results
 
 def read_examples_from_file(data_dir, mode, task):
     file_path = os.path.join(data_dir, "{}.json".format(mode))

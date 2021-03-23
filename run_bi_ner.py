@@ -53,13 +53,10 @@ from transformers import (
     XLMRobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenClassificationWithDiceLoss, BertForTokenClassificationWithTrigger,\
-     BertForTokenBinaryClassification, BertForTokenBinaryClassificationWithTrigger
-from utils import get_labels
+from model import BertForTokenBinaryClassification
+from utils import get_labels, write_file
 from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities, \
     f1_score, precision_score, recall_score
-# from utils_ner import convert_examples_to_features, get_labels, read_examples_from_file
-from utils import write_file
 
 try:
     from torch.utils.tensorboard import SummaryWriter

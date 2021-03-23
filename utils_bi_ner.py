@@ -52,8 +52,44 @@ class InputFeatures(object):
         self.start_label_ids = start_label_ids
         self.end_label_ids = end_label_ids
 
-
+## ccks格式
 def role_process_bin(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    count = 0
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        count += 1
+        if "id" not in row:
+            row["id"]=count
+        start_labels = ['O']*len(row["content"]) 
+        end_labels = ['O']*len(row["content"]) 
+        # arguments = []
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
+            continue
+        for event in row["events"]:
+            for arg in event["mentions"]:
+                role = arg['role']
+                if role=="trigger": continue
+
+                argument_start_index, argument_end_index = arg["span"]
+                argument_end_index -= 1
+                if start_labels[argument_start_index]=="O":
+                    start_labels[argument_start_index] = role
+                else: 
+                    start_labels[argument_start_index] += (" "+ role)
+                if end_labels[argument_end_index]=="O":
+                    end_labels[argument_end_index] = role
+                else: 
+                    end_labels[argument_end_index] += (" "+ role)
+
+        results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
+    return results
+
+## lic格式
+def role_process_bin2(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     count = 0
@@ -70,7 +106,6 @@ def role_process_bin(input_file, is_predict=False):
             results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
         for event in row["event_list"]:
-            event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
                 argument = arg['argument']
@@ -88,8 +123,35 @@ def role_process_bin(input_file, is_predict=False):
 
         results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
     return results
-
+    
+## ccks格式
 def trigger_process_bin(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        start_labels = ['O']*len(row["content"])
+        end_labels = ['O']*len(row["content"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
+            continue
+        for event in row["events"]:
+            event_type = event["type"]
+            for mention in event["mentions"]:
+                if mention["role"]=="trigger":
+                    trigger = mention["word"]
+                    trigger_start_index, trigger_end_index = mention["span"]
+                    trigger_end_index -= 1
+                    start_labels[trigger_start_index]= event_type
+                    end_labels[trigger_end_index]= event_type
+                    break
+        results.append({"id":row["id"], "words":list(row["content"]),  "start_labels":start_labels, "end_labels":end_labels})
+    # write_file(results,output_file)
+    return results
+
+## lic格式
+def trigger_process_bin2(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -110,7 +172,6 @@ def trigger_process_bin(input_file, is_predict=False):
         results.append({"id":row["id"], "words":list(row["text"]),  "start_labels":start_labels, "end_labels":end_labels})
     # write_file(results,output_file)
     return results
-
 
 def read_examples_from_file(data_dir, mode, task):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
@@ -290,8 +351,11 @@ def convert_label_ids_to_onehot(label_ids,label_list):
                 one_hot_labels[i][sub_label_id]= 1
     return one_hot_labels
 
-
-def get_entities(start_logits, end_logits, attention_mask):
+import numpy as np
+def get_entities(start_logits, end_logits, attention_mask=None):
+    # start_logits: [batch_size, seq_length, labels]
+    if attention_mask is None:
+        attention_mask = np.ones(start_logits.shape[:-1])
     batch_size, seq_length, num_labels = start_logits.shape
     batch_pred_list = []
     dis = 12

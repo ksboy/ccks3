@@ -1,6 +1,21 @@
 import json
 import re
-import collections
+
+from transformers import BertTokenizer
+class OurBertTokenizer(BertTokenizer):
+    def _tokenize(self, text):
+        R = ["[CLS]"]
+        for c in text:
+            if c in self.vocab:
+                R.append(c)
+            elif c == ' ':
+                R.append('[unused1]')
+            # elif c == '“' or c == '”':
+            #     R.append('"')
+            else:
+                R.append('[UNK]') # 剩余的字符是[UNK]
+        R.append("[SEP]")
+        return R
 
 def write_file(datas, output_file):
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -69,123 +84,6 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
                     labels.append(role_type)
         return remove_duplication(labels)
 
-def data_val(input_file):
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-
-    event_type_count = 0
-    event_type_count2 = 0
-    role_count = 0
-    arg_count = 0
-    arg_count2 = 0
-    arg_role_count = 0
-    arg_role_one_event_count = 0
-    trigger_count = 0 # triggr
-
-    for row in rows:
-        if len(row)==1: print(row)
-        row = json.loads(row)
-
-        arg_start_index_list=[]
-        arg_start_index_map={}
-        event_type_list = []
-        trigger_start_index_list = []
-
-        event_type_flag = False  # 两个不同类型的事件
-        event_type_flag2 = False # 两个事件
-        arg_start_index_flag = False # 一个事件，一个 role 对应多个 arg: 相同/不同
-        arg_start_index_flag2 = False # 一个事件，一个 role 对应多个 arg：不同
-        role_flag = False # 一个/多个事件，一个arg对应多个role：相同/不同
-        arg_role_flag= False # 一个/多个事件，一个arg对应多个role：不同
-        arg_role_one_event_flag= False # 一个事件 一个arg对应多个role：不同
-        trigger_flag = False
-
-        for event in row["event_list"]:
-            event_type = event["event_type"]
-            if event_type_list==[]: 
-                event_type_list.append(event_type)
-            else:
-                event_type_flag2 = True
-                # print(row)
-                if event_type not in event_type_list:
-                    # event_class_count += 1
-                    event_type_flag = True
-                    # print(row)
-            
-            trigger = event["trigger"]
-            trigger_start_index= event["trigger_start_index"]
-            if [trigger_start_index, trigger] not in trigger_start_index_list:
-                trigger_start_index_list.append([trigger_start_index, trigger])
-            else:
-                trigger_flag = True
-                # print(row)
-
-            role_list = []
-            role_map = {}
-            arg_start_index_map_in_one_event = {}
-            for arg in  event["arguments"]:
-                role = arg['role']
-                argument = arg['argument']
-                argument_start_index = arg["argument_start_index"]
-                if role not in role_list:
-                    role_list.append(role)
-                    role_map[role] = argument
-                else: 
-                    arg_start_index_flag = True
-                    if argument!= role_map[role]:
-                        arg_start_index_flag2 = True
-                        # print(row)
-                    else:
-                        pass
-                        # print(row)
-                
-                if argument_start_index not in arg_start_index_map_in_one_event:
-                    arg_start_index_map_in_one_event[argument_start_index]= role
-                else:
-                    if role!= arg_start_index_map_in_one_event[argument_start_index]:
-                        arg_role_one_event_flag = True
-                        # if event_type != "股份股权转让":
-                            # print(row)
-                        # return 0
-
-
-                if argument_start_index not in arg_start_index_list:
-                    arg_start_index_list.append(argument_start_index)
-                    arg_start_index_map[argument_start_index]= role
-                else: 
-                    role_flag = True
-                    if role!= arg_start_index_map[argument_start_index]:
-                        arg_role_flag = True
-                        if len(row["event_list"])>1: print(row)
-                    else:
-                        pass
-                        # print(row)
-    
-        if role_flag:
-            role_count += 1
-            # print(row)
-        if event_type_flag:
-            event_type_count += 1
-            # print(row)
-        if event_type_flag2:
-            event_type_count2 += 1
-            # print(row)
-        if arg_start_index_flag:
-            arg_count += 1
-            # print(row)
-        if arg_start_index_flag2:
-            arg_count2 += 1
-            # print(row)
-        if arg_role_flag:
-            arg_role_count += 1
-        if arg_role_one_event_flag:
-            arg_role_one_event_count += 1
-            # print(row)
-        if trigger_flag:
-            trigger_count += 1
-    
-    print(event_type_count, event_type_count2, role_count, arg_count, arg_count2, arg_role_count, arg_role_one_event_count, trigger_count)
-
-
 
 def find_all(a_str, sub):
     start = 0
@@ -236,79 +134,6 @@ def get_sub(text):
     return reviews
 
 
-def convert(input_file, output_file, mode="train"):
-    res = []
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-    text_all_count = 0
-    text_out_count = 0
-    arg_all_count = 0
-    arg_out_count = 0
-    for row in rows:
-        row = json.loads(row)
-        # assert(sum([len(text) for text in _split(row['content'])])==len(row['content']))
-        # assert len(text) <= 510
-        text_all_count += 1
-        new_row = {}
-        new_row['id'] = row['id']
-        text = row['content']
-        new_row['text'] = text
-        if len(text)>510: text_out_count+=1
-        event_list = []
-        if mode=="train": 
-            for event in row["events"]:
-                new_event = {}
-                new_event["event_type"] = event["type"]
-                arguments = []
-
-                for mention in event["mentions"]:
-                    arg_all_count += 1
-                    argument = mention["word"]
-                    role = mention["role"]
-                    argument_start_index = mention["span"][0]
-                    if role == "trigger":
-                        new_event["trigger"] = argument
-                        new_event["trigger_start_index"] = argument_start_index
-                        continue
-
-                    argument_map = {}
-                    argument_map['role'] = role
-                    argument_map['argument'] = argument
-                    argument_map['argument_start_index']= argument_start_index
-                    arguments.append(argument_map)
-                new_event['arguments'] = arguments
-                event_list.append(new_event)
-
-        new_row['event_list'] = event_list
-        res.append(new_row)
-    # print(res[:10])
-    print(text_all_count, text_out_count, arg_all_count, arg_out_count)
-    write_file(res, output_file)
-
-# 统计 event_type 分布
-def data_analysis(input_file):
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-    label_list= get_labels(task='trigger', mode="classification")
-    print(label_list)
-    label_map = {label: i for i, label in enumerate(label_list)}
-    label_count = [0 for i in range(len(label_list))]
-    count = 0
-    len_list = []
-    for row in rows:
-        row = json.loads(row)
-        text = row['text']
-        if len(text) > 254:
-            count += 1
-        len_list.append(len(text))
-        for event in row["event_list"]:
-            event_type = event["event_type"]
-            label_count[label_map[event_type]] += 1
-
-    obj = collections.Counter(len_list)
-    # print([[k,v] for k,v in obj.items()])
-    print(sorted([[k,v] for k,v in obj.items()], key=lambda x:x[0])[-10:])
-    print(label_count)
-    print(count)
-
 def get_num_of_arguments(input_file):
     lines = open(input_file, encoding='utf-8').read().splitlines()
     arg_count = 0
@@ -334,53 +159,13 @@ def read_write(input_file, output_file):
         results.append(row)
     write_file(results, output_file)
 
-def schema_analysis(path="./data/event_schema/event_schema.json"):
-    rows = open(path, encoding='utf-8').read().splitlines()
-    argument_map = {}
-    for row in rows:
-        d_json = json.loads(row)
-        event_type = d_json["event_type"]
-        for r in d_json["role_list"]:
-            role = r["role"]
-            if role in argument_map:
-                argument_map[role].append(event_type)
-            else: 
-                argument_map[role]= [event_type]
-    argument_unique = []
-    argument_duplicate = []
-    for argument, event_type_list in argument_map.items():
-        if len(event_type_list)==1:
-            argument_unique.append(argument)
-        else:
-            argument_duplicate.append(argument)
-
-    print(argument_unique, argument_duplicate)
-    for argument in argument_duplicate:
-        print(argument_map[argument])
-
-    return argument_map
-
-
 if __name__ == '__main__':
     # labels = get_labels(path="./data/event_schema/base.json", task='role', mode="classification")
     # print(len(labels))
     
-    # convert("./data/FewFC-main/rearranged/train_base.json", "./data/FewFC-main/converted/train_base.json")
-    # convert("./data/FewFC-main/rearranged/test_base.json", "./data/FewFC-main/converted/test_base.json")
-    # convert("./data/FewFC-main/rearranged/train_trans.json", "./data/FewFC-main/converted/train_trans.json")
-    # convert("./data/FewFC-main/rearranged/test_trans.json", "./data/FewFC-main/converted/test_trans.json")
-    
-
-    data_val("./data/FewFC-main/converted/train_base.json")
-    # data_analysis("./data/trans/train.json")
-    # data_analysis("./data/trans/test.json")
-
-    # 无异常
-    # position_val("./data/train_data/train.json")
 
     # get_num_of_arguments("./results/test_pred_bin_segment.json")
 
     # read_write("./output/eval_pred.json", "./results/eval_pred.json")
     # read_write("./results/test1.trigger.pred.json", "./results/paddle.trigger.json")
-
-    # schema_analysis()
+    pass
