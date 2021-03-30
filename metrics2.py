@@ -189,7 +189,7 @@ def compute_metric(truefile,predfile):
 if __name__ == "__main__":
     truefile = "./data/FewFC-main/converted/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
     # noisedfile = "noised.json"
-    # predfile = "./output/e2e_trans/0/checkpoint-best/test_predictions.json"
-    predfile = "./result/test_trans2.json"
+    predfile = "./output/e2e_trans2/0/checkpoint-best/test_predictions.json"
+    # predfile = "./result/test_trans2.json"
     metric = compute_metric(truefile, predfile)
     print(metric)

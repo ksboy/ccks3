@@ -168,6 +168,76 @@ def predict_data_process_bio(test_file, trigger_file, role_file, schema_file, sa
     pred_ret = [json.dumps(r, ensure_ascii=False) for r in pred_ret]
     write_by_lines(save_path, pred_ret)
 
+
+## trigger-bin + role-bin: 输出为ccks2020文件形式
+def predict_data_process_bin(test_file, trigger_file, role_file, schema_file, save_path):
+    """predict_data_process_bin"""
+    role_label_list = get_labels(path=schema_file, task='role', mode="classification")
+    role_label_map =  {i: label for i, label in enumerate(role_label_list)}
+    trigger_label_list = get_labels(path=schema_file, task='trigger', mode="classification")
+    trigger_label_map =  {i: label for i, label in enumerate(trigger_label_list)}
+
+    pred_ret = []
+    test_datas = read_by_lines(test_file)
+    trigger_datas = read_by_lines(trigger_file)
+    role_datas = read_by_lines(role_file)
+    schema_datas = read_by_lines(schema_file)
+    schema = {}
+    for s in schema_datas:
+        d_json = json.loads(s)
+        schema[d_json["event_type"]] = [r["role"] for r in d_json["role_list"]]
+    # 将role数据进行处理
+    sent_role_mapping = {}
+    for test_data, role_data in zip(test_datas, role_datas):
+        # arguments = json.loads(data)["arguments"]
+        test_data = json.loads(test_data)
+        text = test_data['content']
+        arg_list = json.loads(role_data)['labels']
+        arguments =[]
+        for arg in arg_list:
+            sub_dict = {}
+            # 考虑 CLS
+            argument_start_index = arg[1] -1 
+            argument_end_index = arg[2] -1 
+            argument = text[argument_start_index:argument_end_index+1]
+            role = role_label_map[arg[3]]
+            sub_dict["role"]=role
+            sub_dict["word"]=argument
+            sub_dict["span"] = [argument_start_index, argument_end_index+1]
+            arguments.append(sub_dict)
+        sent_role_mapping[test_data["id"]] = arguments
+
+    for test_data, trigger_data in zip(test_datas, trigger_datas):
+        # arguments = json.loads(data)["arguments"]
+        test_data = json.loads(test_data)
+        text = test_data['content']
+        triggers = json.loads(trigger_data)['labels']
+        event_list = []
+        for _, trigger_start_index, trigger_end_index, event_type_id in triggers:
+            # 考虑 CLS
+            trigger_start_index -= 1
+            trigger_end_index -= 1
+            trigger = text[trigger_start_index:trigger_end_index+1]
+            event_type = trigger_label_map[event_type_id]
+            role_list = schema[event_type]
+            arguments = [{"role": "trigger","span":[trigger_start_index, trigger_end_index+1], "word": trigger}]
+            for arg in sent_role_mapping[test_data["id"]]:
+                role_type = arg['role']
+                if role_type not in role_list:
+                    continue
+                if len(arg) == 1: continue
+                arguments.append(arg)
+            event = {"type": event_type, "mentions": arguments}
+            event_list.append(event)
+        pred_ret.append({
+            "id": test_data["id"],
+            "content": text,
+            "events": event_list
+        })
+    pred_ret = [json.dumps(r, ensure_ascii=False) for r in pred_ret]
+    write_by_lines(save_path, pred_ret)
+
+
 def ensemble(input_file, output_file):
     lines = open(input_file, encoding='utf-8').read().splitlines()
     res =[]
@@ -194,18 +264,21 @@ def ensemble(input_file, output_file):
 
 
 if __name__ == "__main__":
-    predict_data_process_bio(
-        test_file = "./data/FewFC-main/rearranged/trans/0/test.json",
-        trigger_file= "./output/trigger_trans2/0/checkpoint-best/test_predictions.json", \
-        role_file = "./output/role_trans2/0/checkpoint-best/test_predictions.json", \
-        schema_file = "./data/event_schema.json", \
-        save_path =  "./result/test_trans2.json")
+    # predict_data_process_bio(
+    #     test_file = "./data/FewFC-main/rearranged/trans/0/test.json", \
+    #     trigger_file= "./output/trigger_trans2/0/checkpoint-best/test_predictions.json", \
+    #     role_file = "./output/role_trans2/0/checkpoint-best/test_predictions.json", \
+    #     schema_file = "./data/event_schema/trans.json", \
+    #     save_path =  "./result/test_trans2.json")
 
-    # predict_data_process_bin(
-    #     trigger_file= "./output/trigger_classify/0/checkpoint-best/test_predictions_indexed.json", \
-    #     role_file = "./output/role_bin/0/checkpoint-best/test_predictions_indexed.json", \
-    #     schema_file = "./data/ccks4_2/event_schema.json", \
-    #     save_path =  "./results/test_pred_trigger_bin_role_bin_split.json")
+    predict_data_process_bin(
+        test_file = "./data/FewFC-main/rearranged/trans/0/test.json", \
+        # trigger_file= "./output/trigger_trans_bin2/0/checkpoint-best/test_predictions.json", \
+        # role_file = "./output/role_trans_bin2/0/checkpoint-best/test_predictions.json", \
+        trigger_file= "./output/bin_multi_task/0/checkpoint-best/trigger_test_predictions.json", \
+        role_file = "./output/bin_multi_task/0/checkpoint-best/role_test_predictions.json", \
+        schema_file = "./data/event_schema/trans.json", \
+        save_path =  "./output/bin_multi_task/0/checkpoint-best/test_predictions.json")
 
     # ensemble("./output/role_segment_bin/checkpoint-best/eval_predictions_indexed.json",\
     #       "./results/eval_pred_bi_segment.json")

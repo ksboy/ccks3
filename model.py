@@ -443,6 +443,204 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
         return result  # (loss), scores, (hidden_states), (attentions)
 
 
+class BertForTokenBinaryClassificationMultiTask(BertPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.trigger_num_labels = config.trigger_num_labels
+        self.role_num_labels = config.role_num_labels
+
+        self.bert = BertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.trigger_start_classifier = nn.Linear(config.hidden_size, config.trigger_num_labels)
+        self.trigger_end_classifier = nn.Linear(config.hidden_size, config.trigger_num_labels)
+        self.role_start_classifier = nn.Linear(config.hidden_size, config.role_num_labels)
+        self.role_end_classifier = nn.Linear(config.hidden_size, config.role_num_labels)
+
+        self.init_weights()
+
+    # @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING)
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        trigger_start_labels=None, # batch * trigger_num_class * seq_length 
+        trigger_end_labels=None,
+        role_start_labels=None, # batch* role_num_class * seq_length
+        role_end_labels=None,
+    ):
+        r"""
+        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
+            Labels for computing the token classification loss.
+            Indices should be in ``[0, ..., config.num_labels - 1]``.
+
+    Returns:
+        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
+        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when ``labels`` is provided) :
+            Classification loss.
+        scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.num_labels)`)
+            Classification scores (before SoftMax).
+        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
+            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
+
+            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
+        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
+            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
+
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+
+    Examples::
+
+        from transformers import BertTokenizer, BertForTokenClassification
+        import torch
+
+        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        model = BertForTokenClassification.from_pretrained('bert-base-uncased')
+
+        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
+        labels = torch.tensor([1] * input_ids.size(1)).unsqueeze(0)  # Batch size 1
+        outputs = model(input_ids, labels=labels)
+
+        loss, scores = outputs[:2]
+
+        """
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=torch.zeros_like(token_type_ids),
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+
+        sequence_output = outputs[0]
+        outputs= outputs[2:]
+
+        #######################################################
+        ## trigger
+        # sequence_output = self.dropout(sequence_output)
+        trigger_start_logits = self.trigger_start_classifier(sequence_output)
+        trigger_end_logits = self.trigger_end_classifier(sequence_output)
+
+        if trigger_start_labels is not None and trigger_end_labels is not None:
+            # loss_fct = CrossEntropyLoss()
+            # loss_fct = FocalLoss(class_num=self.trigger_num_labels)
+            loss_fct = BCEWithLogitsLoss(reduction="none")
+            # Only keep active parts of the loss
+            if attention_mask is not None:
+                active_loss = attention_mask.view(-1) == 1
+                active_trigger_start_logits = trigger_start_logits.view(-1, self.trigger_num_labels)
+                active_trigger_end_logits = trigger_end_logits.view(-1, self.trigger_num_labels)
+
+                active_trigger_start_labels = trigger_start_labels.view(-1, self.trigger_num_labels)
+                active_trigger_end_labels = trigger_end_labels.view(-1, self.trigger_num_labels)
+
+                trigger_start_loss = loss_fct(active_trigger_start_logits, active_trigger_start_labels.float())
+                trigger_start_loss = trigger_start_loss * (active_loss.unsqueeze(-1))
+                trigger_start_loss = torch.sum(trigger_start_loss)/torch.sum(active_loss)
+
+                trigger_end_loss = loss_fct(active_trigger_end_logits, active_trigger_end_labels.float())
+                trigger_end_loss = trigger_end_loss * (active_loss.unsqueeze(-1))
+                trigger_end_loss = torch.sum(trigger_end_loss)/torch.sum(active_loss)
+
+            else:
+                trigger_start_loss = loss_fct(trigger_start_logits.view(-1, self.trigger_num_labels), trigger_start_labels.view(-1))
+                trigger_end_loss = loss_fct(trigger_end_logits.view(-1, self.trigger_num_labels), trigger_end_labels.view(-1))
+            trigger_loss = trigger_start_loss+ trigger_end_loss
+
+        #######################################################
+        ## role  
+        # sequence_output_role = self.dropout(sequence_output)
+        role_start_logits = self.role_start_classifier(sequence_output)
+        role_end_logits = self.role_end_classifier(sequence_output)
+
+        if role_start_labels is not None and role_end_labels is not None:
+            # loss_fct = CrossEntropyLoss()
+            # loss_fct = FocalLoss(class_num=self.role_num_labels)
+            loss_fct = BCEWithLogitsLoss(reduction="none")
+            # Only keep active parts of the loss
+            if attention_mask is not None:
+                active_loss = attention_mask.view(-1) == 1
+                active_role_start_logits = role_start_logits.view(-1, self.role_num_labels)
+                active_role_end_logits = role_end_logits.view(-1, self.role_num_labels)
+
+                active_role_start_labels = role_start_labels.view(-1, self.role_num_labels)
+                active_role_end_labels = role_end_labels.view(-1, self.role_num_labels)
+
+                role_start_loss = loss_fct(active_role_start_logits, active_role_start_labels.float())
+                role_start_loss = role_start_loss * (active_loss.unsqueeze(-1))
+                role_start_loss = torch.sum(role_start_loss)/torch.sum(active_loss)
+
+                role_end_loss = loss_fct(active_role_end_logits, active_role_end_labels.float())
+                role_end_loss = role_end_loss * (active_loss.unsqueeze(-1))
+                role_end_loss = torch.sum(role_end_loss)/torch.sum(active_loss)
+
+            else:
+                role_start_loss = loss_fct(role_start_logits.view(-1, self.role_num_labels), role_start_labels.view(-1))
+                role_end_loss = loss_fct(role_end_logits.view(-1, self.role_num_labels), role_end_labels.view(-1))
+            role_loss = role_start_loss+ role_end_loss
+        
+        outputs = (trigger_loss+ role_loss,) + ([trigger_start_logits, trigger_end_logits],) + ([role_start_logits, role_end_logits],) + outputs
+
+        return outputs  # (loss), scores, (hidden_states), (attentions)
+        
+    def predict_trigger(self, sequence_output):
+        #######################################################
+        ## trigger
+        # sequence_output_trigger = self.dropout(sequence_output)
+        trigger_start_logits = self.trigger_start_classifier(sequence_output)
+        trigger_end_logits = self.trigger_end_classifier(sequence_output)
+
+        threshold = 0.5
+        trigger_start_logits = torch.sigmoid(trigger_start_logits)> threshold # 1498*256*217
+        trigger_end_logits = torch.sigmoid(trigger_end_logits) > threshold
+        # 64*256*65
+        trigger_list = get_entities(trigger_start_logits.cpu().numpy(), trigger_end_logits.cpu().numpy())[0]
+        return trigger_list
+
+    def predict_role(self, sequence_output):     
+        role_start_logits = self.role_start_classifier(sequence_output)
+        role_end_logits = self.role_end_classifier(sequence_output)
+        
+        threshold = 0.5
+        role_start_logits = torch.sigmoid(role_start_logits)> threshold # 1498*256*217
+        role_end_logits = torch.sigmoid(role_end_logits) > threshold
+
+        role_list = get_entities(role_start_logits.cpu().numpy(), role_end_logits.cpu().numpy())[0]
+        return role_list
+
+    def predict(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None
+    ):
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+        sequence_output = outputs[0]
+        outputs = outputs[2:]
+
+        trigger_list = self.predict_trigger(sequence_output)
+        role_list = self.predict_role(sequence_output)
+        return trigger_list, role_list  # (loss), scores, (hidden_states), (attentions)
+
 class BertForTokenBinaryClassification(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)

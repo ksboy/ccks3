@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id,  words, segment_ids, \
+    def __init__(self, id,  words, \
                 trigger_start_labels,trigger_end_labels,role_start_labels,role_end_labels):
         """Constructs a InputExample.
 
@@ -38,7 +38,6 @@ class InputExample(object):
         """
         self.id = id
         self.words = words
-        self.segment_ids = segment_ids # 目标trigger位置
         self.trigger_start_labels = trigger_start_labels
         self.trigger_end_labels = trigger_end_labels
         self.role_start_labels = role_start_labels
@@ -58,14 +57,13 @@ def data_process_bin(input_file, is_predict=False):
               "role_start_labels":['O']*len(row["content"]), "role_end_labels":['O']*len(row["content"])})
             continue
         
+        trigger_start_labels = ['O']*len(row["content"]) 
+        trigger_end_labels = ['O']*len(row["content"]) 
+        role_start_labels = ['O']*len(row["content"]) 
+        role_end_labels = ['O']*len(row["content"]) 
         # role
         for event in row["events"]:
             event_type = event["type"]
-            segment_ids= [0] * len(row["content"])
-            trigger_start_labels = ['O']*len(row["content"]) 
-            trigger_end_labels = ['O']*len(row["content"]) 
-            role_start_labels = ['O']*len(row["content"]) 
-            role_end_labels = ['O']*len(row["content"]) 
             for arg in event["mentions"]:
                 role = arg['role']
                 # trigger
@@ -80,8 +78,6 @@ def data_process_bin(input_file, is_predict=False):
                         trigger_end_labels[trigger_end_index] = event_type
                     else: 
                         trigger_end_labels[trigger_end_index] += (" "+ event_type)
-                    for i in range(trigger_start_index, trigger_end_index+1):
-                        segment_ids[i] = 1
                     continue
 
                 # role
@@ -97,74 +93,9 @@ def data_process_bin(input_file, is_predict=False):
                 else: 
                     role_end_labels[argument_end_index] += (" "+ role)
 
-            results.append({"id":row["id"], "words":list(row["content"]), "segment_ids":segment_ids, \
-                "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
-                    "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
-    return results
-
-# lic格式
-def data_process_bin2(input_file, is_predict=False):
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-    results = []
-    for row in rows:
-        if len(row)==1: print(row)
-        row = json.loads(row)
-        
-        if is_predict:
-            results.append({"id":row["id"], "tokens":list(row["text"]), "segment_ids": [0] * len(row["text"]), \
-              "trigger_start_labels":['O']*len(row["text"]), "trigger_end_labels":['O']*len(row["text"]), \
-              "role_start_labels":['O']*len(row["text"]), "role_end_labels":['O']*len(row["text"])})
-            continue
-        
-        # trigger
-        trigger_start_labels = ['O']*len(row["text"]) 
-        trigger_end_labels = ['O']*len(row["text"]) 
-        for event in row["event_list"]:
-            event_type = event["event_type"]
-            trigger = event["trigger"]
-            trigger_start_index = event['trigger_start_index']
-            trigger_end_index = trigger_start_index + len(trigger) -1
-            if trigger_start_labels[trigger_start_index]=="O":
-                trigger_start_labels[trigger_start_index] = event_type
-            else: 
-                trigger_start_labels[trigger_start_index] += (" "+ event_type)
-            if trigger_end_labels[trigger_end_index]=="O":
-                trigger_end_labels[trigger_end_index] = event_type
-            else: 
-                trigger_end_labels[trigger_end_index] += (" "+ event_type)
-        
-        # role
-        for event in row["event_list"]:
-            event_type = event["event_type"]
-            trigger = event["trigger"]
-            trigger_start_index = event['trigger_start_index']
-            segment_ids= [0] * len(row["text"])
-            for i in range(trigger_start_index, trigger_start_index+ len(trigger) ):
-                segment_ids[i] = 1
-
-            role_start_labels = ['O']*len(row["text"]) 
-            role_end_labels = ['O']*len(row["text"]) 
-
-            for arg in event["arguments"]:
-                role = arg['role']
-                argument = arg['argument']
-                argument_start_index = arg["argument_start_index"]
-                argument_end_index = argument_start_index + len(argument) -1
-                
-                if role_start_labels[argument_start_index]=="O":
-                    role_start_labels[argument_start_index] = role
-                else: 
-                    role_start_labels[argument_start_index] += (" "+ role)
-                    
-                if role_end_labels[argument_end_index]=="O":
-                    role_end_labels[argument_end_index] = role
-                else: 
-                    role_end_labels[argument_end_index] += (" "+ role)
-
-                # if arg['alias']!=[]: print(arg['alias'])
-            results.append({"id":row["id"], "words":list(row["text"]), "segment_ids":segment_ids, \
-                "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
-                    "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
+        results.append({"id":row["id"], "words":list(row["content"]), \
+            "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
+            "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
     return results
 
 class InputFeatures(object):
@@ -184,7 +115,7 @@ class InputFeatures(object):
 
 def read_examples_from_file(data_dir, mode):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
-    items = data_process_bin(file_path, mode!='train')
+    items = data_process_bin(file_path)
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(
@@ -193,7 +124,6 @@ def convert_examples_to_features(
     role_label_list,
     max_seq_length,
     tokenizer,
-    trigger_token_segment_id = 1,
     cls_token_at_end=False,
     cls_token="[CLS]",
     cls_token_segment_id=1,
@@ -230,9 +160,8 @@ def convert_examples_to_features(
         trigger_end_label_ids = []
         role_start_label_ids = []
         role_end_label_ids = []
-        segment_ids = []
-        for word, segment_id, trigger_start_label, trigger_end_label, role_start_label, role_end_label \
-            in zip(example.words,  example.segment_ids, \
+        for word, trigger_start_label, trigger_end_label, role_start_label, role_end_label \
+            in zip(example.words, \
                 example.trigger_start_labels, example.trigger_end_labels, \
                 example.role_start_labels, example.role_end_labels):
             word_tokens = tokenizer.tokenize(word)
@@ -276,8 +205,6 @@ def convert_examples_to_features(
             role_end_label_ids.append(cur_end_label_ids)
 
 
-            segment_ids.extend( [sequence_a_segment_id if not segment_id else trigger_token_segment_id] )
-
 
             # if len(tokens)!= len(label_ids):
             #     print(word, word_tokens, tokens, label_ids)
@@ -291,7 +218,6 @@ def convert_examples_to_features(
             trigger_end_label_ids = trigger_end_label_ids[: (max_seq_length - special_tokens_count)]
             role_start_label_ids = role_start_label_ids[: (max_seq_length - special_tokens_count)]
             role_end_label_ids = role_end_label_ids[: (max_seq_length - special_tokens_count)]
-            segment_ids = segment_ids[: (max_seq_length - special_tokens_count)]
 
 
         # The convention in BERT is:
@@ -317,7 +243,6 @@ def convert_examples_to_features(
         trigger_end_label_ids += [[pad_token_label_id]]
         role_start_label_ids += [[pad_token_label_id]]
         role_end_label_ids += [[pad_token_label_id]]
-        segment_ids += [sequence_a_segment_id]
 
         if sep_token_extra:
             # roberta uses an extra separator b/w pairs of sentences
@@ -326,7 +251,7 @@ def convert_examples_to_features(
             trigger_end_label_ids += [[pad_token_label_id]]
             role_start_label_ids += [[pad_token_label_id]]
             role_end_label_ids += [[pad_token_label_id]]
-            segment_ids += [sequence_a_segment_id]
+        segment_ids = [sequence_a_segment_id] * len(tokens)
 
         if cls_token_at_end:
             tokens += [cls_token]
