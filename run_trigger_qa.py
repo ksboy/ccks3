@@ -21,11 +21,9 @@ import glob
 import logging
 import os
 import random
-import json
 
 import numpy as np
 import torch
-# from seqeval.metrics import f1_score, precision_score, recall_score
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
@@ -54,11 +52,11 @@ from transformers import (
     XLMRobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenBinaryClassificationMultiTask
-from utils import get_labels, write_file, OurBertTokenizer
-from utils_bi_ner import get_entities
-from metrics import f1_score, precision_score, recall_score
-from utils_bi_ner_multi_task import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
+from model import BertForTokenClassificationWithDiceLoss
+from utils import get_labels, write_file
+from utils_ner import convert_examples_to_features, read_examples_from_file
+from metrics import precision_score, recall_score, f1_score
+
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
@@ -77,7 +75,7 @@ ALL_MODELS = sum(
 
 MODEL_CLASSES = {
     "albert": (AlbertConfig, AlbertForTokenClassification, AlbertTokenizer),
-    "bert": (BertConfig, BertForTokenBinaryClassificationMultiTask, BertTokenizer),
+    "bert": (BertConfig, BertForTokenClassification, BertTokenizer),
     "roberta": (RobertaConfig, RobertaForTokenClassification, RobertaTokenizer),
     "distilbert": (DistilBertConfig, DistilBertForTokenClassification, DistilBertTokenizer),
     "camembert": (CamembertConfig, CamembertForTokenClassification, CamembertTokenizer),
@@ -95,7 +93,7 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pad_token_label_id):
+def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     """ Train the model """
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter(log_dir=args.output_dir)
@@ -190,8 +188,8 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
 
     best_metric = 0 
     patience =0
-    for iteration_index in train_iterator:
-        print("{} epoch".format(iteration_index))
+    for _ in train_iterator:
+        print(_, "epoch")
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
@@ -202,9 +200,7 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
 
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-            inputs = {"input_ids": batch[0], "attention_mask": batch[1], \
-                "trigger_start_labels": batch[3], "trigger_end_labels": batch[4],\
-                "role_start_labels": batch[5], "role_end_labels": batch[6]}
+            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
@@ -237,12 +233,12 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
                 model.zero_grad()
                 global_step += 1
 
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0  and iteration_index> -1:
+                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _, _ = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="dev")
+                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev")
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
@@ -251,7 +247,7 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
 
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
-                        patience += 1
+                        if best_metric != 0: patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)
                         print("Current Metric", current_metric)
@@ -298,8 +294,8 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode, prefix=""):
-    eval_dataset = load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode=mode)
+def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""):
+    eval_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode=mode)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
@@ -310,113 +306,110 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_labe
     # fix the bug when using mult-gpu during evaluating
     if args.n_gpu > 1 and not isinstance(model, torch.nn.DataParallel):
         model = torch.nn.DataParallel(model)
-    
+
     # Eval!
     logger.info("***** Running evaluation %s *****", prefix)
     logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
     nb_eval_steps = 0
-    trigger_start_preds, role_start_preds = None, None
+    preds = None
+    out_label_ids = None
     model.eval()
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
-            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "trigger_start_labels": batch[3], "trigger_end_labels": batch[4], \
-                "role_start_labels": batch[5], "role_end_labels": batch[6]}
+            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
                 )  # XLM and RoBERTa don"t use segment_ids
             outputs = model(**inputs)
-            tmp_eval_loss, (trigger_start_logits, trigger_end_logits), (role_start_logits, role_end_logits) = outputs[:3]
+            tmp_eval_loss, logits = outputs[:2]
 
             if args.n_gpu > 1:
                 tmp_eval_loss = tmp_eval_loss.mean()  # mean() to average on multi-gpu parallel evaluating
 
             eval_loss += tmp_eval_loss.item()
         nb_eval_steps += 1
-        # trigger
-        if trigger_start_preds is None:
-            attention_mask = inputs["attention_mask"].detach().cpu().numpy()
-            trigger_start_preds = trigger_start_logits.detach().cpu().numpy()
-            trigger_start_out_label_ids = inputs["trigger_start_labels"].detach().cpu().numpy()
-            trigger_end_preds = trigger_end_logits.detach().cpu().numpy()
-            trigger_end_out_label_ids = inputs["trigger_end_labels"].detach().cpu().numpy()
+        if preds is None:
+            preds = logits.detach().cpu().numpy()
+            out_label_ids = inputs["labels"].detach().cpu().numpy()
         else:
-            attention_mask = np.append(attention_mask, inputs["attention_mask"].detach().cpu().numpy(), axis=0)
-            trigger_start_preds = np.append(trigger_start_preds, trigger_start_logits.detach().cpu().numpy(), axis=0)
-            trigger_start_out_label_ids = np.append(trigger_start_out_label_ids, inputs["trigger_start_labels"].detach().cpu().numpy(), axis=0)
-            trigger_end_preds = np.append(trigger_end_preds, trigger_end_logits.detach().cpu().numpy(), axis=0)
-            trigger_end_out_label_ids = np.append(trigger_end_out_label_ids, inputs["trigger_end_labels"].detach().cpu().numpy(), axis=0)
-        # role
-        if role_start_preds is None:
-            attention_mask = inputs["attention_mask"].detach().cpu().numpy()
-            role_start_preds = role_start_logits.detach().cpu().numpy()
-            role_start_out_label_ids = inputs["role_start_labels"].detach().cpu().numpy()
-            role_end_preds = role_end_logits.detach().cpu().numpy()
-            role_end_out_label_ids = inputs["role_end_labels"].detach().cpu().numpy()
-        else:
-            attention_mask = np.append(attention_mask, inputs["attention_mask"].detach().cpu().numpy(), axis=0)
-            role_start_preds = np.append(role_start_preds, role_start_logits.detach().cpu().numpy(), axis=0)
-            role_start_out_label_ids = np.append(role_start_out_label_ids, inputs["role_start_labels"].detach().cpu().numpy(), axis=0)
-            role_end_preds = np.append(role_end_preds, role_end_logits.detach().cpu().numpy(), axis=0)
-            role_end_out_label_ids = np.append(role_end_out_label_ids, inputs["role_end_labels"].detach().cpu().numpy(), axis=0)
+            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+            out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
 
     eval_loss = eval_loss / nb_eval_steps
+    preds = np.argmax(preds, axis=2)
+    
+    # id2label={i: label for i, label in enumerate(labels)}
+    # label2id={label: i for i, label in enumerate(labels)}
 
-    def sigmoid(x):
-        s = 1 / (1 + np.exp(-x))
-        return s
-    
-    def extract_entities(start_preds, end_preds, attention_mask):
-        # start_out_label_ids.shape 1498*256*217 
-        batch_preds_list= get_entities(start_preds, end_preds, attention_mask)
-        # print(batch_preds_list[:5])
-        # 变成 一维
-        preds_list = []
-        for row_preds_list in batch_preds_list:
-            for pred in row_preds_list:
-                preds_list.append(pred)
-        return preds_list
-    
-    
-    threshold = 0.5
-    trigger_start_preds = sigmoid(trigger_start_preds) > threshold 
-    trigger_end_preds = sigmoid(trigger_end_preds) > threshold
-    role_start_preds = sigmoid(role_start_preds) > threshold 
-    role_end_preds = sigmoid(role_end_preds) > threshold
+    label_map = {i: label for i, label in enumerate(labels)}
 
-    batch_trigger_preds_list = get_entities(trigger_start_preds, trigger_end_preds, attention_mask)
-    batch_role_preds_list = get_entities(role_start_preds, role_end_preds, attention_mask)
+    gold_triggers = [[] for _ in range(out_label_ids.shape[0])]
+    pred_triggers = [[] for _ in range(out_label_ids.shape[0])]
 
-    trigger_preds_list = extract_entities(trigger_start_preds, trigger_end_preds, attention_mask)
-    role_preds_list = extract_entities(role_start_preds, role_end_preds, attention_mask)
-    trigger_out_label_list = extract_entities(trigger_start_out_label_ids, trigger_end_out_label_ids, attention_mask)
-    role_out_label_list = extract_entities(role_start_out_label_ids, role_end_out_label_ids, attention_mask)
+    sep_index_list = [1] * out_label_ids.shape[0]
+    for i in range(out_label_ids.shape[0]):
+        sep_index = sep_index_list[i]
+        for j in range(sep_index, out_label_ids.shape[1]):
+            if out_label_ids[i, j] != pad_token_label_id:
+                gold_triggers[i].append([j, label_map[out_label_ids[i][j]]])
+                pred_triggers[i].append([j, label_map[preds[i][j]]])
+
+    # get results (classification)
+    pre_c = precision_score(gold_triggers, pred_triggers)
+    recall_c = recall_score(gold_triggers, pred_triggers)
+    f1_c = f1_score(gold_triggers, pred_triggers)
+
+    # get results (identification)
+    gold_triggers_offset = []
+    for i in range(len(gold_triggers)):
+        sent_triggers_offset = []
+        for trigger in gold_triggers[i]:
+            sent_triggers_offset.append(trigger[0])
+        gold_triggers_offset.append(sent_triggers_offset)
+
+    pred_triggers_offset = []
+    for i in range(len(pred_triggers)):
+        sent_triggers_offset = []
+        for trigger in pred_triggers[i]:
+            sent_triggers_offset.append(trigger[0])
+        pred_triggers_offset.append(sent_triggers_offset)
+
+    pre_i = precision_score(gold_triggers_offset, pred_triggers_offset)
+    recall_i = recall_score(gold_triggers_offset, pred_triggers_offset)
+    f1_i = f1_score(gold_triggers_offset, pred_triggers_offset)
     
+    preds = copy.deepcopy(eval_examples)
+    for sentence_id, pred in enumerate(preds):
+        s_start = pred['s_start']
+        pred['event'] = []
+        pred_sentence_triggers = pred_triggers[sentence_id]
+        for trigger in pred_sentence_triggers:
+            offset = s_start + trigger[0]
+            category = trigger[1]
+            pred['event'].append([[offset, category]])
+
+    return result, preds
+
     results = {
         "loss": eval_loss,
-        "trigger_precision":  precision_score(trigger_out_label_list, trigger_preds_list),
-        "trigger_recall": recall_score(trigger_out_label_list, trigger_preds_list),
-        "trigger_f1":  f1_score(trigger_out_label_list, trigger_preds_list),
-        "role_precision":  precision_score(role_out_label_list, role_preds_list),
-        "role_recall": recall_score(role_out_label_list, role_preds_list),
-        "role_f1":  f1_score(role_out_label_list, role_preds_list),
-        "f1": (f1_score(trigger_out_label_list, trigger_preds_list) + \
-            f1_score(role_out_label_list, role_preds_list))/2
+        "precision": precision_score(gold_triggers, pred_triggers),
+        "recall": recall_score(gold_triggers, pred_triggers),
+        "f1": f1_score(gold_triggers, pred_triggers),
     }
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
     
-    return results, batch_trigger_preds_list, batch_role_preds_list, # start_logits.tolist(), end_logits.tolist()
+    return results, pred_triggers
 
 
-
-def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode):
+def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
@@ -432,11 +425,10 @@ def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_to
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode)
+        examples = read_examples_from_file(args.data_dir, mode, args.task)
         features = convert_examples_to_features(
             examples,
-            trigger_labels,
-            role_labels,
+            labels,
             args.max_seq_length,
             tokenizer,
             cls_token_at_end=bool(args.model_type in ["xlnet"]),
@@ -463,12 +455,9 @@ def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_to
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    all_trigger_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.trigger_start_label_ids, trigger_labels) for f in features], dtype=torch.int)
-    all_trigger_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.trigger_end_label_ids, trigger_labels) for f in features], dtype=torch.int)
-    all_role_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.role_start_label_ids, role_labels) for f in features], dtype=torch.int)
-    all_role_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.role_end_label_ids, role_labels) for f in features], dtype=torch.int)
-    dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_trigger_start_label_ids, all_trigger_end_label_ids,\
-        all_role_start_label_ids, all_role_end_label_ids)
+    all_label_ids = torch.tensor([f.label_ids for f in features], dtype=torch.long)
+
+    dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
     return dataset
 
 
@@ -673,13 +662,10 @@ def main():
     set_seed(args)
 
     # Prepare CONLL-2003 task
-    trigger_labels = get_labels(args.schema, task="trigger", mode="classification")
-    num_trigger_labels = len(trigger_labels)
-    role_labels = get_labels(args.schema, task="role", mode="classification")
-    num_role_labels = len(role_labels)
+    labels = get_labels(args.schema, task=args.task)
+    num_labels = len(labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
-    ignore_index = -100
-    pad_token_label_id = ignore_index
+    pad_token_label_id = CrossEntropyLoss().ignore_index
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
@@ -689,16 +675,11 @@ def main():
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
     config = config_class.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
+        num_labels=num_labels,
+        id2label={str(i): label for i, label in enumerate(labels)},
+        label2id={label: i for i, label in enumerate(labels)},
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    our_config = {"trigger_num_labels":num_trigger_labels,
-        "role_num_labels":num_role_labels,
-        "trigger_id2label":{str(i): label for i, label in enumerate(trigger_labels)},
-        "trigger_label2id":{label: i for i, label in enumerate(trigger_labels)},
-        "role_id2label":{str(i): label for i, label in enumerate(role_labels)},
-        "role_label2id":{label: i for i, label in enumerate(role_labels)},}
-    config.update(our_config)
-
     tokenizer_args = {k: v for k, v in vars(args).items() if v is not None and k in TOKENIZER_ARGS}
     logger.info("Tokenizer arguments: %s", tokenizer_args)
     tokenizer = tokenizer_class.from_pretrained(
@@ -734,8 +715,8 @@ def main():
 
     # Training
     if args.do_train:
-        train_dataset = load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="train")
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pad_token_label_id)
+        train_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode="train")
+        global_step, tr_loss = train(args, train_dataset, model, tokenizer, labels, pad_token_label_id)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
@@ -769,48 +750,39 @@ def main():
         for checkpoint in checkpoints:
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result, trigger_predictions, role_predictions = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="dev", prefix=checkpoint)
+            result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev", prefix=checkpoint)
             # Save results
             output_eval_results_file = os.path.join(checkpoint, "eval_results.txt")
             with open(output_eval_results_file, "w") as writer:
                 for key in sorted(result.keys()):
                     writer.write("{} = {}\n".format(key, str(result[key])))
             # Save predictions
-            trigger_output_eval_predictions_file = os.path.join(checkpoint, "trigger_eval_predictions.json")
+            output_eval_predictions_file = os.path.join(checkpoint, "eval_predictions.json")
             results = []
-            for prediction in trigger_predictions:
+            for prediction in predictions:
                 results.append({'labels':prediction})
-            write_file(results, trigger_output_eval_predictions_file)
-            role_output_eval_predictions_file = os.path.join(checkpoint, "role_eval_predictions.json")
-            results = []
-            for prediction in role_predictions:
-                results.append({'labels':prediction})
-            write_file(results, role_output_eval_predictions_file)
-            
+            write_file(results, output_eval_predictions_file)  
+
 
     if args.do_predict and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(args.output_dir, **tokenizer_args)
         checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
         model = model_class.from_pretrained(checkpoint)
         model.to(args.device)
-        result, trigger_predictions, role_predictions = evaluate(args, model, tokenizer, trigger_labels, role_labels, pad_token_label_id, mode="test")
+        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
         # Save results
         output_test_results_file = os.path.join(checkpoint, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
             for key in sorted(result.keys()):
                 writer.write("{} = {}\n".format(key, str(result[key])))
         # Save predictions
-        trigger_output_eval_predictions_file = os.path.join(checkpoint, "trigger_test_predictions.json")
+        output_test_predictions_file = os.path.join(checkpoint, "test_predictions.json")
         results = []
-        for prediction in trigger_predictions:
+        for prediction in predictions:
             results.append({'labels':prediction})
-        write_file(results, trigger_output_eval_predictions_file)
-        role_output_eval_predictions_file = os.path.join(checkpoint, "role_test_predictions.json")
-        results = []
-        for prediction in role_predictions:
-            results.append({'labels':prediction})
-        write_file(results, role_output_eval_predictions_file)
+        write_file(results,output_test_predictions_file)      
 
+    return results
 
 
 if __name__ == "__main__":

@@ -84,6 +84,33 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
                     labels.append(role_type)
         return remove_duplication(labels)
 
+class trigger_category_vocab(object):
+    """docstring for trigger_category_vocab"""
+    def __init__(self):
+        self.category_to_index = dict()
+        self.index_to_category = dict()
+        self.counter = Counter()
+        self.max_sent_length = 0
+
+    def create_vocab(self, files_list):
+        self.category_to_index["None"] = 0
+        self.index_to_category[0] = "None"
+        for file in files_list:
+            with open(file) as f:
+                for line in f:
+                    example = json.loads(line)
+                    events, sentence = example["event"], example["sentence"] 
+                    if len(sentence) > self.max_sent_length: self.max_sent_length = len(sentence)
+                    for event in events:
+                        event_type = event[0][1]
+                        self.counter[event_type] += 1
+                        if event_type not in self.category_to_index:
+                            index = len(self.category_to_index)
+                            self.category_to_index[event_type] = index
+                            self.index_to_category[index] = event_type
+
+        # add [CLS]
+        self.max_sent_length += 12
 
 def find_all(a_str, sub):
     start = 0
@@ -160,8 +187,8 @@ def read_write(input_file, output_file):
     write_file(results, output_file)
 
 if __name__ == '__main__':
-    # labels = get_labels(path="./data/event_schema/base.json", task='role', mode="classification")
-    # print(len(labels))
+    labels = get_labels(path="./data/DuEE_1_0/event_schema.json", task='role', mode="classification")
+    print(len(labels))
     
 
     # get_num_of_arguments("./results/test_pred_bin_segment.json")

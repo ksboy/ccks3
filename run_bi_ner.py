@@ -55,8 +55,8 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassification
 from utils import get_labels, write_file
-from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities, \
-    f1_score, precision_score, recall_score
+from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities
+from metrics import f1_score, precision_score, recall_score
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -361,20 +361,20 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     batch_preds_list= get_entities(start_preds, end_preds, attention_mask)
     # print(batch_preds_list[:5])
     # 变成 一维
-    out_label_list = []
-    preds_list = []
-    for row_preds_list in batch_preds_list:
-        for pred in row_preds_list:
-            preds_list.append(pred)
-    for row_out_label_list in batch_out_label_list:
-        for out_label in row_out_label_list:
-            out_label_list.append(out_label)
+    # out_label_list = []
+    # preds_list = []
+    # for row_preds_list in batch_preds_list:
+    #     for pred in row_preds_list:
+    #         preds_list.append(pred)
+    # for row_out_label_list in batch_out_label_list:
+    #     for out_label in row_out_label_list:
+    #         out_label_list.append(out_label)
 
     results = {
         "loss": eval_loss,
-        "precision":  precision_score(out_label_list, preds_list),
-        "recall": recall_score(out_label_list, preds_list),
-        "f1":  f1_score(out_label_list, preds_list),
+        "precision":  precision_score(batch_out_label_list, batch_preds_list),
+        "recall": recall_score(batch_out_label_list, batch_preds_list),
+        "f1":  f1_score(batch_out_label_list, batch_preds_list),
     }
 
     logger.info("***** Eval results %s *****", prefix)

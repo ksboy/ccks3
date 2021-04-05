@@ -264,12 +264,12 @@ def ensemble(input_file, output_file):
 
 
 if __name__ == "__main__":
-    # predict_data_process_bio(
-    #     test_file = "./data/FewFC-main/rearranged/trans/0/test.json", \
-    #     trigger_file= "./output/trigger_trans2/0/checkpoint-best/test_predictions.json", \
-    #     role_file = "./output/role_trans2/0/checkpoint-best/test_predictions.json", \
-    #     schema_file = "./data/event_schema/trans.json", \
-    #     save_path =  "./result/test_trans2.json")
+    predict_data_process_bio(
+        test_file = "./data/FewFC-main/rearranged/trans/0/test.json", \
+        trigger_file= "./output/trigger_trans2/0/checkpoint-best/test_predictions.json", \
+        role_file = "./output/role_trans2/0/checkpoint-best/test_predictions.json", \
+        schema_file = "./data/event_schema/trans.json", \
+        save_path =  "./result/test_trans2.json")
 
     predict_data_process_bin(
         test_file = "./data/FewFC-main/rearranged/trans/0/test.json", \

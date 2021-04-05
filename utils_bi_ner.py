@@ -374,36 +374,3 @@ def get_entities(start_logits, end_logits, attention_mask=None):
         batch_pred_list.append(cur_pred_list)
     return batch_pred_list
 
-def precision_score(labels, preds):
-    nb_correct = 0
-    for label in labels:
-        if label in preds:
-            nb_correct += 1
-            continue
-    nb_pred = len(labels)
-    p = nb_correct / nb_pred if nb_pred > 0 else 0
-    return p
-
-def recall_score(labels, preds):
-    nb_correct = 0
-    for label in labels:
-        if label in preds:
-            nb_correct += 1
-            continue
-    nb_true = len(preds)
-    r = nb_correct / nb_true if nb_true > 0 else 0
-    return r
-
-def f1_score(labels, preds):
-    nb_correct = 0
-    for label in labels:
-        if label in preds:
-            nb_correct += 1
-            continue
-    nb_pred = len(labels)
-    nb_true = len(preds)
-    p = nb_correct / nb_pred if nb_pred > 0 else 0
-    r = nb_correct / nb_true if nb_true > 0 else 0
-    f1 = 2 * p * r / (p + r) if p + r > 0 else 0
-    return f1
-

@@ -5,7 +5,7 @@ MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch/  #albert-x
 # MODEL=./output/trigger_base/0/
 DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/0/
 SCHEMA=./data/event_schema/$DOMAIN.json
-OUTPUT_DIR=./output/bin_multi_task/0/
+OUTPUT_DIR=./output/role_crf_ner/0/
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=45
@@ -15,8 +15,9 @@ WARMUP_STEPS=100
 SEED=1
 LR=3e-5
 
-# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_bi_ner_joint.py \
-CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner_multi_task.py \
+mkdir -p $OUTPUT_DIR 
+# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_crf_ner.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_crf_ner.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \
