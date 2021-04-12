@@ -98,6 +98,62 @@ def data_process_bin(input_file, is_predict=False):
             "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
     return results
 
+## lic格式
+def data_process_bin2(input_file, is_predict=False):
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        
+        if is_predict:
+            results.append({"id":row["id"], "tokens":list(row["text"]), "segment_ids": [0] * len(row["text"]), \
+              "trigger_start_labels":['O']*len(row["text"]), "trigger_end_labels":['O']*len(row["text"]), \
+              "role_start_labels":['O']*len(row["text"]), "role_end_labels":['O']*len(row["text"])})
+            continue
+        
+        trigger_start_labels = ['O']*len(row["text"]) 
+        trigger_end_labels = ['O']*len(row["text"]) 
+        role_start_labels = ['O']*len(row["text"]) 
+        role_end_labels = ['O']*len(row["text"]) 
+        # trigger
+        for event in row["event_list"]:
+            event_type = event["event_type"]
+            trigger = event["trigger"]
+            trigger_start_index = event['trigger_start_index']
+            trigger_end_index = trigger_start_index + len(trigger) -1
+            if trigger_start_labels[trigger_start_index]=="O":
+                trigger_start_labels[trigger_start_index] = event_type
+            else: 
+                trigger_start_labels[trigger_start_index] += (" "+ event_type)
+            if trigger_end_labels[trigger_end_index]=="O":
+                trigger_end_labels[trigger_end_index] = event_type
+            else: 
+                trigger_end_labels[trigger_end_index] += (" "+ event_type)
+
+        # role
+        for event in row["event_list"]:
+            for arg in event["arguments"]:
+                role = arg['role']
+                argument = arg['argument']
+                argument_start_index = arg["argument_start_index"]
+                argument_end_index = argument_start_index + len(argument) -1
+
+                if role_start_labels[argument_start_index]=="O":
+                    role_start_labels[argument_start_index] = role
+                else: 
+                    role_start_labels[argument_start_index] += (" "+ role)
+                    
+                if role_end_labels[argument_end_index]=="O":
+                    role_end_labels[argument_end_index] = role
+                else: 
+                    role_end_labels[argument_end_index] += (" "+ role)
+
+        results.append({"id":row["id"], "words":list(row["text"]), \
+            "trigger_start_labels":trigger_start_labels, "trigger_end_labels":trigger_end_labels, \
+            "role_start_labels":role_start_labels, "role_end_labels":role_end_labels})
+    return results
+
 class InputFeatures(object):
     """A single set of features of data."""
 
@@ -113,9 +169,12 @@ class InputFeatures(object):
         self.role_end_label_ids = role_end_label_ids
 
 
-def read_examples_from_file(data_dir, mode):
+def read_examples_from_file(data_dir, mode, dataset):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
-    items = data_process_bin(file_path)
+    if dataset=="ccks":
+        items = data_process_bin(file_path)
+    elif dataset=="lic":
+        items = data_process_bin2(file_path)
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(

@@ -55,7 +55,7 @@ from transformers import (
 from model import BertForTokenClassificationWithDiceLoss
 from utils import get_labels, write_file
 from utils_ner import convert_examples_to_features, read_examples_from_file
-from metrics import precision_score, recall_score, f1_score
+from seqeval.metrics import precision_score, recall_score, f1_score
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -350,14 +350,20 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
 
     gold_triggers = [[] for _ in range(out_label_ids.shape[0])]
     pred_triggers = [[] for _ in range(out_label_ids.shape[0])]
+    # 不区分 实体类别
+    _gold_triggers = [[] for _ in range(out_label_ids.shape[0])]
+    _pred_triggers = [[] for _ in range(out_label_ids.shape[0])]
 
     sep_index_list = [1] * out_label_ids.shape[0]
     for i in range(out_label_ids.shape[0]):
         sep_index = sep_index_list[i]
         for j in range(sep_index, out_label_ids.shape[1]):
             if out_label_ids[i, j] != pad_token_label_id:
-                gold_triggers[i].append([j, label_map[out_label_ids[i][j]]])
-                pred_triggers[i].append([j, label_map[preds[i][j]]])
+                gold_triggers[i].append(label_map[out_label_ids[i][j]])
+                pred_triggers[i].append(label_map[preds[i][j]])
+                # 不区分 实体类别
+                _gold_triggers[i].append(label_map[out_label_ids[i][j]][:2])
+                _pred_triggers[i].append(label_map[preds[i][j]][:2])
 
     # get results (classification)
     pre_c = precision_score(gold_triggers, pred_triggers)
@@ -365,41 +371,18 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     f1_c = f1_score(gold_triggers, pred_triggers)
 
     # get results (identification)
-    gold_triggers_offset = []
-    for i in range(len(gold_triggers)):
-        sent_triggers_offset = []
-        for trigger in gold_triggers[i]:
-            sent_triggers_offset.append(trigger[0])
-        gold_triggers_offset.append(sent_triggers_offset)
-
-    pred_triggers_offset = []
-    for i in range(len(pred_triggers)):
-        sent_triggers_offset = []
-        for trigger in pred_triggers[i]:
-            sent_triggers_offset.append(trigger[0])
-        pred_triggers_offset.append(sent_triggers_offset)
-
-    pre_i = precision_score(gold_triggers_offset, pred_triggers_offset)
-    recall_i = recall_score(gold_triggers_offset, pred_triggers_offset)
-    f1_i = f1_score(gold_triggers_offset, pred_triggers_offset)
-    
-    preds = copy.deepcopy(eval_examples)
-    for sentence_id, pred in enumerate(preds):
-        s_start = pred['s_start']
-        pred['event'] = []
-        pred_sentence_triggers = pred_triggers[sentence_id]
-        for trigger in pred_sentence_triggers:
-            offset = s_start + trigger[0]
-            category = trigger[1]
-            pred['event'].append([[offset, category]])
-
-    return result, preds
+    pre_i = precision_score(_gold_triggers, _pred_triggers)
+    recall_i = recall_score(_gold_triggers, _pred_triggers)
+    f1_i = f1_score(_gold_triggers, _pred_triggers)
 
     results = {
         "loss": eval_loss,
-        "precision": precision_score(gold_triggers, pred_triggers),
-        "recall": recall_score(gold_triggers, pred_triggers),
-        "f1": f1_score(gold_triggers, pred_triggers),
+        "pre_i": pre_i,
+        "recall_i": recall_i,
+        "f1_i": f1_i,
+        "pre": pre_c,
+        "recall": recall_c,
+        "f1": f1_c,
     }
 
     logger.info("***** Eval results %s *****", prefix)

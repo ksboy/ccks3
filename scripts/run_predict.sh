@@ -1,13 +1,14 @@
 MAX_LENGTH=256
 TASK=trigger
+DOMAIN=trans
 MODEL=/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-DATA_DIR=./data/FewFC-main/base/
-SCHEMA=./data/event_schema.json
-OUTPUT_DIR=./output/trigger_base/0/
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/0/
+SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/trigger_trans_bin2/0/
 EVAL_BATCH_SIZE=64
 SEED=1
 
-CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner_multi_task.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \
@@ -19,7 +20,5 @@ CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
 --output_dir $OUTPUT_DIR \
 --max_seq_length  $MAX_LENGTH \
 --per_gpu_eval_batch_size $EVAL_BATCH_SIZE \
---seed $SEED 
-# --fp16 \
-# --freeze \
-# --overwrite_cache \
+--overwrite_cache \
+--seed $SEED > $OUTPUT_DIR/predict.log 2>&1 &

@@ -58,14 +58,11 @@ def data_process_bin(input_file, is_predict=False):
               "role_start_labels":['O']*len(row["content"]), "role_end_labels":['O']*len(row["content"])})
             continue
         
-        # role
+        # trigger
+        trigger_start_labels = ['O']*len(row["content"]) 
+        trigger_end_labels = ['O']*len(row["content"]) 
         for event in row["events"]:
             event_type = event["type"]
-            segment_ids= [0] * len(row["content"])
-            trigger_start_labels = ['O']*len(row["content"]) 
-            trigger_end_labels = ['O']*len(row["content"]) 
-            role_start_labels = ['O']*len(row["content"]) 
-            role_end_labels = ['O']*len(row["content"]) 
             for arg in event["mentions"]:
                 role = arg['role']
                 # trigger
@@ -80,11 +77,21 @@ def data_process_bin(input_file, is_predict=False):
                         trigger_end_labels[trigger_end_index] = event_type
                     else: 
                         trigger_end_labels[trigger_end_index] += (" "+ event_type)
+                    break
+        
+        # role
+        role_start_labels = ['O']*len(row["content"]) 
+        role_end_labels = ['O']*len(row["content"])
+        for event in row["events"]:
+            event_type = event["type"]
+            segment_ids= [0] * len(row["content"])
+            for arg in event["mentions"]:
+                role = arg['role']
+                # segment_ids
+                if role=="trigger":
                     for i in range(trigger_start_index, trigger_end_index+1):
                         segment_ids[i] = 1
                     continue
-
-                # role
                 argument_start_index, argument_end_index = arg["span"]
                 argument_end_index -= 1
                 if role_start_labels[argument_start_index]=="O":
@@ -182,9 +189,12 @@ class InputFeatures(object):
         self.role_end_label_ids = role_end_label_ids
 
 
-def read_examples_from_file(data_dir, mode):
+def read_examples_from_file(data_dir, mode, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
-    items = data_process_bin(file_path, mode!='train')
+    if dataset=="ccks":
+        items = data_process_bin(file_path, mode!='train')
+    elif dataset=="lic":
+        items = data_process_bin2(file_path, mode!='train')
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(

@@ -385,7 +385,7 @@ def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_to
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode)
+        examples = read_examples_from_file(args.data_dir, mode, args.dataset)
         features = convert_examples_to_features(
             examples,
             trigger_labels,
@@ -435,6 +435,13 @@ def main():
     parser = argparse.ArgumentParser()
 
     # Required parameters
+    parser.add_argument(
+        "--dataset",
+        default=None,
+        type=str,
+        required=True,
+        help="The dataset name.",
+    )
     parser.add_argument(
         "--task",
         default=None,

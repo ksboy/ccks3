@@ -78,11 +78,10 @@ if __name__ == '__main__':
     # convert("./data/FewFC-main/rearranged/train_trans.json", "./data/FewFC-main/converted/train_trans.json")
     # convert("./data/FewFC-main/rearranged/test_trans.json", "./data/FewFC-main/converted/test_trans.json")
     
-
     # split_data("./data/FewFC-main/trigger_base/train.json",  "./data/FewFC-main/trigger_base",  num_split=5)
     # split_data("./data/FewFC-main/trigger_trans/train.json",  "./data/FewFC-main/trigger_trans",  num_split=5)
     # split_data("./data/FewFC-main/role_base/train.json",  "./data/FewFC-main/role_base",  num_split=5)
     # split_data("./data/FewFC-main/role_trans/train.json",  "./data/FewFC-main/role_trans",  num_split=5)
     # split_data("./data/FewFC-main/role_trans_segment/train.json",  "./data/FewFC-main/role_trans_segment",  num_split=5)
-    split_data("./data/FewFC-main/rearranged/base/train.json",  "./data/FewFC-main/rearranged/base",  num_split=5)
+    split_data("./data/DuEE_1_0/train.json",  "./data/DuEE_1_0/base",  num_split=5)
 
