@@ -16,7 +16,7 @@
 """hello world"""
 
 import json
-from seqeval.metrics.sequence_labeling import get_entities
+from seqeval..sequence_labeling import get_entities.sequence_labeling import get_entities
 
 from utils import get_labels, write_file
 
