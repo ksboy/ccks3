@@ -21,4 +21,4 @@ CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner.py \
 --max_seq_length  $MAX_LENGTH \
 --per_gpu_eval_batch_size $EVAL_BATCH_SIZE \
 --overwrite_cache \
---seed $SEED > $OUTPUT_DIR/eval.log 2>&1 &
+--seed $SEED > $OUTPUT_DIR/eval.log 2>&1 &cd

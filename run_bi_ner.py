@@ -35,11 +35,10 @@ from transformers import (
     WEIGHTS_NAME,
     AdamW,
     AutoConfig,
-    AutoModelForTokenClassification,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenBinaryClassification
+from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
 from utils_bi_ner import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities
 from metrics import f1_score, precision_score, recall_score

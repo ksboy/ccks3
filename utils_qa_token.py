@@ -140,27 +140,3 @@ def read_ace_examples(nth_query, input_file, tokenizer, category_vocab, is_train
 
     return examples, features   
 
-
-import numpy as np
-def get_entities(start_logits, end_logits, attention_mask=None):
-    # start_logits: [batch_size, seq_length, labels]
-    if attention_mask is None:
-        attention_mask = np.ones(start_logits.shape[:-1])
-    batch_size, seq_length, num_labels = start_logits.shape
-    batch_pred_list = []
-    dis = 12
-    for i in range(batch_size):   # batch_index
-        cur_pred_list=[]
-        for j in range(seq_length):  # token_index 
-            if not attention_mask[i, j]: continue
-            # 实体 头
-            for k in range(num_labels):  
-                if start_logits[i][j][k]:
-                    # 寻找 实体尾 
-                    for l in range(j, min(j+ dis, seq_length)):
-                        if end_logits[i][l][k]:
-                            cur_pred_list.append((i, j, l, k)) # index, start, end, label
-                            break
-        batch_pred_list.append(cur_pred_list)
-    return batch_pred_list
-

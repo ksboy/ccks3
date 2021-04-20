@@ -24,38 +24,24 @@ import random
 
 import numpy as np
 import torch
+from seqeval.metrics import f1_score, precision_score, recall_score
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from transformers import (
+    MODEL_FOR_TOKEN_CLASSIFICATION_MAPPING,
     WEIGHTS_NAME,
     AdamW,
-    AlbertConfig,
-    AlbertForTokenClassification,
-    AlbertTokenizer,
-    BertConfig,
-    BertForTokenClassification,
-    BertTokenizer,
-    CamembertConfig,
-    CamembertForTokenClassification,
-    CamembertTokenizer,
-    DistilBertConfig,
-    DistilBertForTokenClassification,
-    DistilBertTokenizer,
-    RobertaConfig,
-    RobertaForTokenClassification,
-    RobertaTokenizer,
-    XLMRobertaConfig,
-    XLMRobertaForTokenClassification,
-    XLMRobertaTokenizer,
+    AutoConfig,
+    AutoModelForTokenClassification,
+    AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
 from model import BertForTokenClassificationWithDiceLoss
 from utils import get_labels, write_file
 from utils_ner import convert_examples_to_features, read_examples_from_file
-from metrics import precision_score, recall_score, f1_score
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -65,22 +51,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (BertConfig, RobertaConfig, DistilBertConfig, CamembertConfig, XLMRobertaConfig)
-    ),
-    (),
-)
-
-MODEL_CLASSES = {
-    "albert": (AlbertConfig, AlbertForTokenClassification, AlbertTokenizer),
-    "bert": (BertConfig, BertForTokenClassification, BertTokenizer),
-    "roberta": (RobertaConfig, RobertaForTokenClassification, RobertaTokenizer),
-    "distilbert": (DistilBertConfig, DistilBertForTokenClassification, DistilBertTokenizer),
-    "camembert": (CamembertConfig, CamembertForTokenClassification, CamembertTokenizer),
-    "xlmroberta": (XLMRobertaConfig, XLMRobertaForTokenClassification, XLMRobertaTokenizer),
-}
+MODEL_CONFIG_CLASSES = list(MODEL_FOR_TOKEN_CLASSIFICATION_MAPPING.keys())
+MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 TOKENIZER_ARGS = ["do_lower_case", "strip_accents", "keep_accents", "use_fast"]
 
@@ -342,62 +314,30 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
 
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=2)
-    
-    # id2label={i: label for i, label in enumerate(labels)}
-    # label2id={label: i for i, label in enumerate(labels)}
 
     label_map = {i: label for i, label in enumerate(labels)}
 
-    gold_triggers = [[] for _ in range(out_label_ids.shape[0])]
-    pred_triggers = [[] for _ in range(out_label_ids.shape[0])]
+    out_label_list = [[] for _ in range(out_label_ids.shape[0])]
+    preds_list = [[] for _ in range(out_label_ids.shape[0])]
 
-    sep_index_list = [1] * out_label_ids.shape[0]
     for i in range(out_label_ids.shape[0]):
-        sep_index = sep_index_list[i]
-        for j in range(sep_index, out_label_ids.shape[1]):
+        for j in range(out_label_ids.shape[1]):
             if out_label_ids[i, j] != pad_token_label_id:
-                gold_triggers[i].append([j, label_map[out_label_ids[i][j]]])
-                pred_triggers[i].append([j, label_map[preds[i][j]]])
-
-    # get results (classification)
-    pre_c = precision_score(gold_triggers, pred_triggers)
-    recall_c = recall_score(gold_triggers, pred_triggers)
-    f1_c = f1_score(gold_triggers, pred_triggers)
-
-    # get results (identification)
-    gold_triggers_offset = []
-    for i in range(len(gold_triggers)):
-        sent_triggers_offset = []
-        for trigger in gold_triggers[i]:
-            sent_triggers_offset.append(trigger[0])
-        gold_triggers_offset.append(sent_triggers_offset)
-
-    pred_triggers_offset = []
-    for i in range(len(pred_triggers)):
-        sent_triggers_offset = []
-        for trigger in pred_triggers[i]:
-            sent_triggers_offset.append(trigger[0])
-        pred_triggers_offset.append(sent_triggers_offset)
-
-    pre_i = precision_score(gold_triggers_offset, pred_triggers_offset)
-    recall_i = recall_score(gold_triggers_offset, pred_triggers_offset)
-    f1_i = f1_score(gold_triggers_offset, pred_triggers_offset)
+                out_label_list[i].append(label_map[out_label_ids[i][j]])
+                preds_list[i].append(label_map[preds[i][j]])
 
     results = {
         "loss": eval_loss,
-        "pre_i": pre_i,
-        "recall_i": recall_i,
-        "f1_i": f1_i,
-        "pre_c": pre_c,
-        "recall_c": recall_c,
-        "f1_c": f1_c,
+        "precision": precision_score(out_label_list, preds_list),
+        "recall": recall_score(out_label_list, preds_list),
+        "f1": f1_score(out_label_list, preds_list),
     }
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
     
-    return results, pred_triggers
+    return results, preds_list
 
 
 def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
@@ -416,7 +356,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode, args.task)
+        examples = read_examples_from_file(args.data_dir, mode, args.task, args.dataset)
         features = convert_examples_to_features(
             examples,
             labels,
@@ -457,6 +397,13 @@ def main():
 
     # Required parameters
     parser.add_argument(
+        "--dataset",
+        default=None,
+        type=str,
+        required=True,
+        help="The dataset name.",
+    )
+    parser.add_argument(
         "--task",
         default=None,
         type=str,
@@ -475,14 +422,14 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()),
+        help="Model type selected in the list: " + ", ".join(MODEL_TYPES),
     )
     parser.add_argument(
         "--model_name_or_path",
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        help="Path to pretrained model or model identifier from huggingface.co/models",
     )
     parser.add_argument(
         "--output_dir",
@@ -663,8 +610,7 @@ def main():
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     args.model_type = args.model_type.lower()
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    config = config_class.from_pretrained(
+    config = AutoConfig.from_pretrained(
         args.config_name if args.config_name else args.model_name_or_path,
         num_labels=num_labels,
         id2label={str(i): label for i, label in enumerate(labels)},
@@ -673,12 +619,12 @@ def main():
     )
     tokenizer_args = {k: v for k, v in vars(args).items() if v is not None and k in TOKENIZER_ARGS}
     logger.info("Tokenizer arguments: %s", tokenizer_args)
-    tokenizer = tokenizer_class.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
         **tokenizer_args,
     )
-    model = model_class.from_pretrained(
+    model = AutoModelForTokenClassification.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
@@ -730,7 +676,7 @@ def main():
 
     # Evaluation
     if args.do_eval and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, **tokenizer_args)
+        tokenizer = AutoTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
         checkpoints = [os.path.join(args.output_dir, 'checkpoint-best')]
         if args.eval_all_checkpoints:
             checkpoints = list(
@@ -739,7 +685,7 @@ def main():
             logging.getLogger("pytorch_transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
-            model = model_class.from_pretrained(checkpoint)
+            model = AutoModelForTokenClassification.from_pretrained(checkpoint)
             model.to(args.device)
             result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev", prefix=checkpoint)
             # Save results
@@ -756,9 +702,9 @@ def main():
 
 
     if args.do_predict and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, **tokenizer_args)
+        tokenizer = AutoTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
         checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
-        model = model_class.from_pretrained(checkpoint)
+        model = AutoModelForTokenClassification.from_pretrained(checkpoint)
         model.to(args.device)
         result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
         # Save results

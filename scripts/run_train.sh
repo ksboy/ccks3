@@ -20,7 +20,7 @@ LR=3e-5
 
 mkdir -p $OUTPUT_DIR 
 # CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_crf_ner.py \
-CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_bi_ner_joint.py \
 --dataset $DATASET \
 --task $TASK \
 --model_type bert \
