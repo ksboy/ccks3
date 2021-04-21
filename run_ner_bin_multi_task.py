@@ -41,9 +41,9 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassificationMultiTask as AutoModelForTokenClassification
 from utils import get_labels, write_file, OurBertTokenizer
-from utils_bi_ner import get_entities
+from utils_ner_bin import get_entities
 from metrics import f1_score, precision_score, recall_score
-from utils_bi_ner_multi_task import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
+from utils_ner_bin_multi_task import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:

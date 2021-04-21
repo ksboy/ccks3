@@ -22,15 +22,6 @@ import json
 from utils import get_labels
 logger = logging.getLogger(__name__)
 
-candidate_queries = [
-['what', 'is', 'the', 'trigger', 'in', 'the', 'event', '?'], # 0 what is the trigger in the event?
-['what', 'happened', 'in', 'the', 'event', '?'], # 1 what happened in the event?
-['trigger'], # 2 trigger
-['t'], # 3 t
-['action'], # 4 action
-['verb'], # 5 verb
-['null'], # 6 null
-]
 
 class InputExample(object):
     """A single training/test example for token classification."""
@@ -155,26 +146,6 @@ def role_process_bio_ccks(input_file, is_predict=False):
     # write_file(results,output_file)
     return results
 
-## ace 格式
-def trigger_process_bio_ace(input_file, is_predict=False):
-    infile = open(input_file).read()
-    examples = json.loads(infile)
-    results = []
-    for i, example in enumerate(examples):
-        results.append({"id":example["id"], "words":example["words"], "labels":example["event-labels"]})
-    return results
-
-## ace 格式 Todo
-def role_process_bio_ace(input_file, is_predict=False):
-    infile = open(input_file).read()
-    examples = json.loads(infile)
-    results = []
-    for i, example in enumerate(examples):
-        for event in example["event-mentions"]:
-            arguments =  event["arguments"]
-            results.append({"id":example["id"], "words":example["words"], "labels":example["event-labels"]})
-    return results
-
 def read_examples_from_file(data_dir, mode, task, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
@@ -183,9 +154,6 @@ def read_examples_from_file(data_dir, mode, task, dataset="ccks"):
     elif dataset=="lic":
         if task=='trigger': items = trigger_process_bio_lic(file_path)
         elif task=='role': items = role_process_bio_lic(file_path)
-    elif dataset=="ace":
-        if task=='trigger': items = trigger_process_bio_ace(file_path)
-        elif task=='role': items = role_process_bio_ace(file_path)
     return [InputExample(**item) for item in items]
 
 

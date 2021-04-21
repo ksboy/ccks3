@@ -177,7 +177,7 @@ class BertForTokenClassificationWithDiceLoss(BertPreTrainedModel):
 
 
 
-from utils_bi_ner import get_entities
+from utils_ner_bin import get_entities
 class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)

@@ -22,6 +22,15 @@ import json
 from utils import get_labels
 logger = logging.getLogger(__name__)
 
+candidate_queries = [
+['what', 'is', 'the', 'trigger', 'in', 'the', 'event', '?'], # 0 what is the trigger in the event?
+['what', 'happened', 'in', 'the', 'event', '?'], # 1 what happened in the event?
+['trigger'], # 2 trigger
+['t'], # 3 t
+['action'], # 4 action
+['verb'], # 5 verb
+['null'], # 6 null
+]
 
 class InputExample(object):
     """A single training/test example for token classification."""
@@ -50,7 +59,7 @@ class InputFeatures(object):
         self.label_ids = label_ids
 
 ## lic 格式
-def trigger_process_bio2(input_file, is_predict=False):
+def trigger_process_bio_lic(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -73,7 +82,7 @@ def trigger_process_bio2(input_file, is_predict=False):
     return results
 
 ## ccks格式
-def trigger_process_bio(input_file, is_predict=False):
+def trigger_process_bio_ccks(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -99,7 +108,7 @@ def trigger_process_bio(input_file, is_predict=False):
     return results
 
 ## lic格式
-def role_process_bio2(input_file, is_predict=False):
+def role_process_bio_lic(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -123,7 +132,7 @@ def role_process_bio2(input_file, is_predict=False):
     return results
 
 ## ccks格式
-def role_process_bio(input_file, is_predict=False):
+def role_process_bio_ccks(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -146,14 +155,37 @@ def role_process_bio(input_file, is_predict=False):
     # write_file(results,output_file)
     return results
 
+## ace 格式
+def trigger_process_bio_ace(input_file, is_predict=False):
+    infile = open(input_file).read()
+    examples = json.loads(infile)
+    results = []
+    for i, example in enumerate(examples):
+        results.append({"id":example["id"], "words":example["words"], "labels":example["event-labels"]})
+    return results
+
+## ace 格式 Todo
+def role_process_bio_ace(input_file, is_predict=False):
+    infile = open(input_file).read()
+    examples = json.loads(infile)
+    results = []
+    for i, example in enumerate(examples):
+        for event in example["event-mentions"]:
+            arguments =  event["arguments"]
+            results.append({"id":example["id"], "words":example["words"], "labels":example["event-labels"]})
+    return results
+
 def read_examples_from_file(data_dir, mode, task, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        if task=='trigger': items = trigger_process_bio(file_path)
-        elif task=='role': items = role_process_bio(file_path)
+        if task=='trigger': items = trigger_process_bio_ccks(file_path)
+        elif task=='role': items = role_process_bio_ccks(file_path)
     elif dataset=="lic":
-        if task=='trigger': items = trigger_process_bio2(file_path)
-        elif task=='role': items = role_process_bio2(file_path)
+        if task=='trigger': items = trigger_process_bio_lic(file_path)
+        elif task=='role': items = role_process_bio_lic(file_path)
+    elif dataset=="ace":
+        if task=='trigger': items = trigger_process_bio_ace(file_path)
+        elif task=='role': items = role_process_bio_ace(file_path)
     return [InputExample(**item) for item in items]
 
 
