@@ -45,7 +45,7 @@ class InputExample(object):
         self.role_end_labels = role_end_labels
 
 ## ccks格式
-def data_process_bin(input_file, is_predict=False):
+def data_process_bin_ccks(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -110,7 +110,7 @@ def data_process_bin(input_file, is_predict=False):
     return results
 
 # lic格式
-def data_process_bin2(input_file, is_predict=False):
+def data_process_bin_lic(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -192,9 +192,9 @@ class InputFeatures(object):
 def read_examples_from_file(data_dir, mode, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        items = data_process_bin(file_path, mode!='train')
+        items = data_process_bin_ccks(file_path, mode!='train')
     elif dataset=="lic":
-        items = data_process_bin2(file_path, mode!='train')
+        items = data_process_bin_lic(file_path, mode!='train')
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(

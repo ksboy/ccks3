@@ -1,11 +1,11 @@
-# from transformers import BertTokenizer, BertTokenizerFast, BertForSequenceClassification
+from transformers import BertTokenizer, BertTokenizerFast, BertForSequenceClassification
 # from transformers import glue_convert_examples_to_features
-# # tokenizer = BertTokenizerFast.from_pretrained("/home/whou/workspace/pretrained_models/chinese_wwm_ext_pytorch/" ,\
-# #     tokenize_chinese_chars=True)
+tokenizer = BertTokenizerFast.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/" ,\
+    tokenize_chinese_chars=True)
 # model = BertForSequenceClassification.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/", \
-#     mirror='https://mirrors.tuna.tsinghua.edu.cn/hugging-face-models')
-# res= tokenizer.encode_plus("我是侯 伟", return_offsets_mapping=True)
-# print(res)
+    # mirror='https://mirrors.tuna.tsinghua.edu.cn/hugging-face-models')
+res= tokenizer.encode_plus("我是侯 伟","你好", max_length=10, pad_to_max_length=True)
+print(res)
 
 # from scipy.special import softmax
 # aList = [2.3, -2.3]
@@ -37,7 +37,7 @@
 # json.dump(a,file)
 
 
-import json
-infile = open("./data/ACE05/dev_process.json").read()
-tmp = json.loads(infile)
-print(tmp)
+# import json
+# infile = open("./data/ACE05/dev_process.json").read()
+# tmp = json.loads(infile)
+# print(tmp)

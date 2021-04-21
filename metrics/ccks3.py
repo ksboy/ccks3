@@ -188,6 +188,6 @@ if __name__ == "__main__":
     truefile = "./data/FewFC-main/original/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
     # noisedfile = "noised.json"
     # predfile = "./result/test_trans_bin.json"
-    predfile = "./output/bin_multi_task/0/checkpoint-best/test_predictions.json"
+    predfile = "./output/ccks/bin_multi_task/0/checkpoint-best/test_predictions.json"
     metric = compute_metric(truefile, predfile)
     print(metric)

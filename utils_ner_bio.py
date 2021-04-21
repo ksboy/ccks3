@@ -194,17 +194,15 @@ def convert_examples_to_features(
         label_ids = []
         for word, label in zip(example.words, example.labels):
             word_tokens = tokenizer.tokenize(word)
-            tokens.extend(word_tokens)
-
+            if len(word_tokens)==1:
+                tokens.extend(word_tokens)
             if len(word_tokens)>1: 
-                # print(word,">1") # 没有
-                pass
-            if len(word_tokens)<1: 
-                # print(word,"<1") 基本都是空格
+                print(word,">1") 
+                tokens.extend(word_tokens[:1])
+            if len(word_tokens)<1:
+                print(word,"<1") # 基本都是空格
                 tokens.extend(["[unused1]"])
-                # continue
-            # Use the real label id for the first token of the word, and padding ids for the remaining tokens
-            label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
+            label_ids.extend([label_map[label]])
             # if len(tokens)!= len(label_ids):
             #     print(word, word_tokens, tokens, label_ids)
             assert len(tokens) == len(label_ids)
