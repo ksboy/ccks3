@@ -44,7 +44,7 @@ class InputExample(object):
         self.role_end_labels = role_end_labels
 
 ## ccks格式
-def data_process_bin_ccks(input_file, is_predict=False):
+def data_process_bin_ccks(input_file, add_event_type_to_role=False, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -52,7 +52,7 @@ def data_process_bin_ccks(input_file, is_predict=False):
         row = json.loads(row)
         
         if is_predict:
-            results.append({"id":row["id"], "tokens":list(row["content"]), "segment_ids": [0] * len(row["content"]), \
+            results.append({"id":row["id"], "tokens":list(row["content"]), "token_type_ids": [0] * len(row["content"]), \
               "trigger_start_labels":['O']*len(row["content"]), "trigger_end_labels":['O']*len(row["content"]), \
               "role_start_labels":['O']*len(row["content"]), "role_end_labels":['O']*len(row["content"])})
             continue
@@ -66,6 +66,7 @@ def data_process_bin_ccks(input_file, is_predict=False):
             event_type = event["type"]
             for arg in event["mentions"]:
                 role = arg['role']
+                if add_event_type_to_role: role = event_type + '-' + role
                 # trigger
                 if role=="trigger":
                     trigger_start_index, trigger_end_index = arg["span"]
@@ -99,7 +100,7 @@ def data_process_bin_ccks(input_file, is_predict=False):
     return results
 
 ## lic格式
-def data_process_bin_lic(input_file, is_predict=False):
+def data_process_bin_lic(input_file, add_event_type_to_role=False, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -107,7 +108,7 @@ def data_process_bin_lic(input_file, is_predict=False):
         row = json.loads(row)
         
         if is_predict:
-            results.append({"id":row["id"], "tokens":list(row["text"]), "segment_ids": [0] * len(row["text"]), \
+            results.append({"id":row["id"], "tokens":list(row["text"]), "token_type_ids": [0] * len(row["text"]), \
               "trigger_start_labels":['O']*len(row["text"]), "trigger_end_labels":['O']*len(row["text"]), \
               "role_start_labels":['O']*len(row["text"]), "role_end_labels":['O']*len(row["text"])})
             continue
@@ -133,8 +134,10 @@ def data_process_bin_lic(input_file, is_predict=False):
 
         # role
         for event in row["event_list"]:
+            event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
+                if add_event_type_to_role: role = event_type + '-' + role
                 argument = arg['argument']
                 argument_start_index = arg["argument_start_index"]
                 argument_end_index = argument_start_index + len(argument) -1
@@ -157,12 +160,12 @@ def data_process_bin_lic(input_file, is_predict=False):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, input_ids, input_mask, segment_ids, \
+    def __init__(self, input_ids, attention_mask, token_type_ids, \
             trigger_start_label_ids, trigger_end_label_ids,\
             role_start_label_ids, role_end_label_ids):
         self.input_ids = input_ids
-        self.input_mask = input_mask
-        self.segment_ids = segment_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
         self.trigger_start_label_ids = trigger_start_label_ids
         self.trigger_end_label_ids = trigger_end_label_ids
         self.role_start_label_ids = role_start_label_ids
@@ -172,9 +175,9 @@ class InputFeatures(object):
 def read_examples_from_file(data_dir, mode, dataset):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        items = data_process_bin_ccks(file_path)
+        items = data_process_bin_ccks(file_path, add_event_type_to_role=True)
     elif dataset=="lic":
-        items = data_process_bin_lic(file_path)
+        items = data_process_bin_lic(file_path, add_event_type_to_role=True)
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(
@@ -310,7 +313,7 @@ def convert_examples_to_features(
             trigger_end_label_ids += [[pad_token_label_id]]
             role_start_label_ids += [[pad_token_label_id]]
             role_end_label_ids += [[pad_token_label_id]]
-        segment_ids = [sequence_a_segment_id] * len(tokens)
+        token_type_ids = [sequence_a_segment_id] * len(tokens)
 
         if cls_token_at_end:
             tokens += [cls_token]
@@ -318,36 +321,36 @@ def convert_examples_to_features(
             trigger_end_label_ids += [[pad_token_label_id]]
             role_start_label_ids += [[pad_token_label_id]]
             role_end_label_ids += [[pad_token_label_id]]
-            segment_ids += [cls_token_segment_id]
+            token_type_ids += [cls_token_segment_id]
         else:
             tokens = [cls_token] + tokens
             trigger_start_label_ids = [[pad_token_label_id]] + trigger_start_label_ids
             trigger_end_label_ids = [[pad_token_label_id]] + trigger_end_label_ids
             role_start_label_ids = [[pad_token_label_id]] + role_start_label_ids
             role_end_label_ids = [[pad_token_label_id]] + role_end_label_ids
-            segment_ids = [cls_token_segment_id] + segment_ids
+            token_type_ids = [cls_token_segment_id] + token_type_ids
 
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
         # print(len(tokens), len(input_ids), len(label_ids))
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
-        input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
+        attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
         # Zero-pad up to the sequence length.
         padding_length = max_seq_length - len(input_ids)
         if pad_on_left:
             input_ids = ([pad_token] * padding_length) + input_ids
-            input_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + input_mask
-            segment_ids = ([pad_token_segment_id] * padding_length) + segment_ids
+            attention_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + attention_mask
+            token_type_ids = ([pad_token_segment_id] * padding_length) + token_type_ids
             trigger_start_label_ids = ([[pad_token_label_id]] * padding_length) + trigger_start_label_ids
             trigger_end_label_ids = ([[pad_token_label_id]] * padding_length) + trigger_end_label_ids
             role_start_label_ids = ([[pad_token_label_id]] * padding_length) + role_start_label_ids
             role_end_label_ids = ([[pad_token_label_id]] * padding_length) + role_end_label_ids
         else:
             input_ids += [pad_token] * padding_length
-            input_mask += [0 if mask_padding_with_zero else 1] * padding_length
-            segment_ids += [pad_token_segment_id] * padding_length
+            attention_mask += [0 if mask_padding_with_zero else 1] * padding_length
+            token_type_ids += [pad_token_segment_id] * padding_length
             trigger_start_label_ids += [[pad_token_label_id]] * padding_length
             trigger_end_label_ids += [[pad_token_label_id]] * padding_length
             role_start_label_ids += [[pad_token_label_id]] * padding_length
@@ -356,8 +359,8 @@ def convert_examples_to_features(
         # print(len(label_ids), max_seq_length)
 
         assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
+        assert len(attention_mask) == max_seq_length
+        assert len(token_type_ids) == max_seq_length
         assert len(trigger_start_label_ids) == max_seq_length
         assert len(trigger_end_label_ids) == max_seq_length
         assert len(role_start_label_ids) == max_seq_length
@@ -368,30 +371,18 @@ def convert_examples_to_features(
             logger.info("id: %s", example.id)
             logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
             logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s", " ".join([str(x) for x in input_mask]))
-            logger.info("segment_ids: %s", " ".join([str(x) for x in segment_ids]))
+            logger.info("attention_mask: %s", " ".join([str(x) for x in attention_mask]))
+            logger.info("token_type_ids: %s", " ".join([str(x) for x in token_type_ids]))
             logger.info("trigger_start_label_ids: %s", " ".join([str(x) for x in trigger_start_label_ids]))
             logger.info("trigger_end_label_ids: %s", " ".join([str(x) for x in trigger_end_label_ids]))
             logger.info("role_start_label_ids: %s", " ".join([str(x) for x in role_start_label_ids]))
             logger.info("role_end_label_ids: %s", " ".join([str(x) for x in role_end_label_ids]))
 
         features.append(
-            InputFeatures(input_ids=input_ids, input_mask=input_mask, segment_ids=segment_ids, \
+            InputFeatures(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, \
                 trigger_start_label_ids=trigger_start_label_ids, trigger_end_label_ids= trigger_end_label_ids, \
                 role_start_label_ids=role_start_label_ids, role_end_label_ids= role_end_label_ids )
         )
     return features
-
-def convert_label_ids_to_onehot(label_ids, label_list):
-    one_hot_labels= [[False]*len(label_list) for _ in range(len(label_ids))]
-    label_map = {label: i for i, label in enumerate(label_list)}
-    ignore_index= -100
-    non_index= -1
-    for i, label_id in enumerate(label_ids):
-        for sub_label_id in label_id:
-            if sub_label_id not in [ignore_index, non_index]:
-                one_hot_labels[i][sub_label_id]= 1
-    return one_hot_labels
-
 
 

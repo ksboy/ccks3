@@ -1,35 +1,55 @@
-# Install newest ptl.
-pip install -U git+http://github.com/PyTorchLightning/pytorch-lightning/
+MAX_LENGTH=256
+DATASET=ccks
+TASK=role
+DOMAIN=trans
+MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
+# MODEL=./output/trigger_base/0/
+# DATA_DIR=./data/DuEE_1_0/0/
+# SCHEMA=./data/DuEE_1_0/event_schema.json
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/0/
+SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/$DATASET/$DOMAIN/role_bin3/0/
+BATCH_SIZE=16
+EVAL_BATCH_SIZE=64
+NUM_EPOCHS=45
+SAVE_STEPS=100 # 300
+# SAVE_STEPS= $save_steps* gradient_accumulation_steps * batch_size * num_gpus
+WARMUP_STEPS=100
+SEED=1
+LR=3e-5
 
-
-curl -L 'https://sites.google.com/site/germeval2014ner/data/NER-de-train.tsv?attredirects=0&d=1' \
-| grep -v "^#" | cut -f 2,3 | tr '\t' ' ' > train.txt.tmp
-curl -L 'https://sites.google.com/site/germeval2014ner/data/NER-de-dev.tsv?attredirects=0&d=1' \
-| grep -v "^#" | cut -f 2,3 | tr '\t' ' ' > dev.txt.tmp
-curl -L 'https://sites.google.com/site/germeval2014ner/data/NER-de-test.tsv?attredirects=0&d=1' \
-| grep -v "^#" | cut -f 2,3 | tr '\t' ' ' > test.txt.tmp
- wget "https://raw.githubusercontent.com/stefan-it/fine-tuned-berts-seq/master/scripts/preprocess.py"
-export MAX_LENGTH=128
-export BERT_MODEL=bert-base-multilingual-cased
-python3 preprocess.py train.txt.tmp $BERT_MODEL $MAX_LENGTH > train.txt
-python3 preprocess.py dev.txt.tmp $BERT_MODEL $MAX_LENGTH > dev.txt
-python3 preprocess.py test.txt.tmp $BERT_MODEL $MAX_LENGTH > test.txt
-cat train.txt dev.txt test.txt | cut -d " " -f 2 | grep -v "^$"| sort | uniq > labels.txt
-export OUTPUT_DIR=germeval-model
-export BATCH_SIZE=32
-export NUM_EPOCHS=3
-export SAVE_STEPS=750
-export SEED=1
-
-python3 run_pl_ner.py --data_dir ./ \
+mkdir -p $OUTPUT_DIR
+# CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_ner_bin.py \
+CUDA_VISIBLE_DEVICES=0 python3 run_ner_bin.py \
+--dataset $DATASET \
+--task $TASK \
 --model_type bert \
---labels ./labels.txt \
---model_name_or_path $BERT_MODEL \
+--model_name_or_path $MODEL \
+--do_train \
+--do_eval \
+--do_predict \
+--evaluate_during_training \
+--data_dir $DATA_DIR \
+--do_lower_case \
+--keep_accents \
+--schema $SCHEMA \
 --output_dir $OUTPUT_DIR \
 --max_seq_length  $MAX_LENGTH \
---num_train_epochs $NUM_EPOCHS \
---train_batch_size 32 \
+--per_gpu_train_batch_size $BATCH_SIZE \
+--per_gpu_eval_batch_size $EVAL_BATCH_SIZE \
+--gradient_accumulation_steps 1 \
 --save_steps $SAVE_STEPS \
+--logging_steps $SAVE_STEPS \
+--num_train_epochs $NUM_EPOCHS \
+--early_stop 5 \
+--learning_rate $LR \
+--weight_decay 0 \
+--warmup_steps $WARMUP_STEPS \
 --seed $SEED \
---do_train \
---do_predict
+--overwrite_output_dir \
+--overwrite_cache > $OUTPUT_DIR/output.log 2>&1 &
+# --fp16 \
+# --freeze 
+# --eval_all_checkpoints \
+
+

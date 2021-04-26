@@ -40,7 +40,8 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
-from utils_qa_bin import read_examples_from_file, convert_examples_to_features, convert_label_ids_to_onehot, get_entities
+from utils_qa_bin_role import read_examples_from_file, convert_examples_to_features
+from utils_ner_bin import get_entities
 from metrics import f1_score, precision_score, recall_score
 
 try:
@@ -176,7 +177,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
+                )  # XLM and RoBERTa don"t use token_type_ids
 
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
@@ -295,7 +296,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
+                )  # XLM and RoBERTa don"t use token_type_ids
             outputs = model(**inputs)
             tmp_eval_loss, (start_logits, end_logits) = outputs[:2]
 
@@ -372,7 +373,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode, args.task, args.dataset)
+        examples = read_examples_from_file(args.data_dir, args.schema,  mode, args.task, args.dataset)
         features = convert_examples_to_features(
             examples,
             labels,
@@ -400,12 +401,12 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
 
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    all_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.start_label_ids, labels) for f in features], dtype=torch.int8)
-    all_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.end_label_ids, labels) for f in features], dtype=torch.int8)
+    all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
+    all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    all_start_label_ids = torch.tensor([f.start_label_ids for f in features], dtype=torch.int8)
+    all_end_label_ids = torch.tensor([f.end_label_ids for f in features], dtype=torch.int8)
 
-    dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_start_label_ids, all_end_label_ids)
+    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_start_label_ids, all_end_label_ids)
     return dataset
 
 
@@ -617,12 +618,11 @@ def main():
     set_seed(args)
 
     # Prepare CONLL-2003 task
-    labels = get_labels(args.schema, task=args.task, mode="classification")
+    labels = ['O']
     # print(labels[:5], labels[-5:])
     num_labels = len(labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
-    ignore_index = -100
-    pad_token_label_id = ignore_index
+    pad_token_label_id = 0
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:

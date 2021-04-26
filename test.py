@@ -1,11 +1,12 @@
-from transformers import BertTokenizer, BertTokenizerFast, BertForSequenceClassification
+from transformers import BertTokenizer, BertTokenizerFast, BertModel, BertForSequenceClassification, BertForQuestionAnswering
 # from transformers import glue_convert_examples_to_features
-tokenizer = BertTokenizerFast.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/" ,\
+tokenizer = BertTokenizer.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/" ,\
     tokenize_chinese_chars=True)
-# model = BertForSequenceClassification.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/", \
-    # mirror='https://mirrors.tuna.tsinghua.edu.cn/hugging-face-models')
-res= tokenizer.encode_plus("我是侯 伟","你好", max_length=10, pad_to_max_length=True)
-print(res)
+input = tokenizer.batch_encode_plus([["我是","你好"]], max_length=10, pad_to_max_length=True, return_tensors='pt')
+print(input)
+model = BertModel.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/")
+output = model(**input)
+print(output[0])
 
 # from scipy.special import softmax
 # aList = [2.3, -2.3]

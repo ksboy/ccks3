@@ -31,7 +31,7 @@ def remove_duplication(alist):
     return res
 
 
-def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
+def get_labels(path="./data/event_schema.json", task='trigger', mode="ner", add_event_type_to_role=True):
     if not path:
         if mode=='ner':
             return ["O", "B-ENTITY", "I-ENTITY"]
@@ -58,14 +58,16 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
         if mode == "ner": labels.append('O')
         for row in rows:
             row = json.loads(row)
+            event_type = row["event_type"]
             for role in row["role_list"]:
-                role_type = role['role']
+                role_type = role['role'] if not add_event_type_to_role else event_type + '-' + role['role']
                 if mode == "ner":
                     labels.append("B-{}".format(role_type))
                     labels.append("I-{}".format(role_type))
                 else:
                     labels.append(role_type)
         return remove_duplication(labels)
+        
     # 特定类型事件 [TASK] 中的角色
     else:
         labels = []
@@ -73,7 +75,7 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner"):
         if mode == "ner": labels.append('O')
         for row in rows:
             row = json.loads(row)
-            if row['class']!=task:
+            if row['event_type']!=task:
                 continue
             for role in row["role_list"]:
                 role_type = role['role']

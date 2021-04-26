@@ -41,7 +41,8 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassificationJoint as AutoModelForTokenClassification
 from utils import get_labels, write_file, OurBertTokenizer
-from utils_bi_ner_joint import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot
+from utils_bi_ner_joint import convert_examples_to_features, read_examples_from_file
+from utils_ner_bin import convert_label_ids_to_onehot, get_entities
 from metrics import compute_metric
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -178,7 +179,7 @@ def train(args, train_dataset, model, tokenizer, eval_tokenizer, trigger_labels,
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
+                )  # XLM and RoBERTa don"t use token_type_ids
 
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
@@ -386,19 +387,19 @@ def load_and_cache_examples(args, tokenizer, trigger_labels, role_labels, pad_to
     # Convert to Tensors and build dataset
     if mode=='train':
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+        all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
+        all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
         all_trigger_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.trigger_start_label_ids, trigger_labels) for f in features], dtype=torch.int)
         all_trigger_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.trigger_end_label_ids, trigger_labels) for f in features], dtype=torch.int)
         all_role_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.role_start_label_ids, role_labels) for f in features], dtype=torch.int)
         all_role_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.role_end_label_ids, role_labels) for f in features], dtype=torch.int)
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_trigger_start_label_ids, all_trigger_end_label_ids,\
+        dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_trigger_start_label_ids, all_trigger_end_label_ids,\
             all_role_start_label_ids, all_role_end_label_ids)
     else:
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids)
+        all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
+        all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+        dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids)
     return dataset
 
 
@@ -615,8 +616,8 @@ def main():
     role_labels = get_labels(args.schema, task="role", mode="classification")
     num_role_labels = len(role_labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
-    ignore_index = -100
-    pad_token_label_id = ignore_index
+    pad_token_label_id = -100
+
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:

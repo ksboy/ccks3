@@ -135,3 +135,4 @@ log/
 data/
 result/
 runs/
+lightning_logs/

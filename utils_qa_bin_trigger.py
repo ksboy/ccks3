@@ -44,85 +44,14 @@ class InputExample(object):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, input_ids, input_mask, segment_ids, start_label_ids, end_label_ids):
+    def __init__(self, input_ids, attention_mask, token_type_ids, start_label_ids, end_label_ids):
         self.input_ids = input_ids
-        self.input_mask = input_mask
-        self.segment_ids = segment_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
         self.start_label_ids = start_label_ids
         self.end_label_ids = end_label_ids
 
-## ccks格式
-def role_process_bin_ccks(input_file, is_predict=False):
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-    results = []
-    count = 0
-    for row in rows:
-        if len(row)==1: print(row)
-        row = json.loads(row)
-        count += 1
-        if "id" not in row:
-            row["id"]=count
-        start_labels = ['O']*len(row["content"]) 
-        end_labels = ['O']*len(row["content"]) 
-        # arguments = []
-        if is_predict: 
-            results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
-            continue
-        for event in row["events"]:
-            for arg in event["mentions"]:
-                role = arg['role']
-                if role=="trigger": continue
 
-                argument_start_index, argument_end_index = arg["span"]
-                argument_end_index -= 1
-                if start_labels[argument_start_index]=="O":
-                    start_labels[argument_start_index] = role
-                else: 
-                    start_labels[argument_start_index] += (" "+ role)
-                if end_labels[argument_end_index]=="O":
-                    end_labels[argument_end_index] = role
-                else: 
-                    end_labels[argument_end_index] += (" "+ role)
-
-        results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
-    return results
-
-## lic格式
-def role_process_bin_lic(input_file, is_predict=False):
-    rows = open(input_file, encoding='utf-8').read().splitlines()
-    results = []
-    count = 0
-    for row in rows:
-        if len(row)==1: print(row)
-        row = json.loads(row)
-        count += 1
-        if "id" not in row:
-            row["id"]=count
-        start_labels = ['O']*len(row["text"]) 
-        end_labels = ['O']*len(row["text"]) 
-        # arguments = []
-        if is_predict: 
-            results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
-            continue
-        for event in row["event_list"]:
-            for arg in event["arguments"]:
-                role = arg['role']
-                argument = arg['argument']
-                argument_start_index = arg["argument_start_index"]
-                argument_end_index = argument_start_index + len(argument) -1
-
-                if start_labels[argument_start_index]=="O":
-                    start_labels[argument_start_index] = role
-                else: 
-                    start_labels[argument_start_index] += (" "+ role)
-                if end_labels[argument_end_index]=="O":
-                    end_labels[argument_end_index] = role
-                else: 
-                    end_labels[argument_end_index] += (" "+ role)
-
-        results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
-    return results
-    
 ## ccks格式
 def trigger_process_bin_ccks(input_file, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
@@ -176,14 +105,14 @@ def read_examples_from_file(data_dir, mode, task, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
         if task=='trigger': items = trigger_process_bin_ccks(file_path)
-        elif task=='role': items = role_process_bin_ccks(file_path)
+        # elif task=='role': items = role_process_bin_ccks(file_path)
     elif dataset=="lic":
         if task=='trigger': items = trigger_process_bin_lic(file_path)
-        elif task=='role': items = role_process_bin_lic(file_path)
+        # elif task=='role': items = role_process_bin_lic(file_path)
     return [InputExample(**item) for item in items]
 
 
-def get_query(dataset, task, nth_query):
+def get_query_templates(dataset, task):
     candidate_queries_trigger_english = [
         ['what', 'is', 'the', 'trigger', '?'], # 0 what is the trigger in the event?
         ['what', 'happened','?'], # 1 what happened in the event?
@@ -202,9 +131,9 @@ def get_query(dataset, task, nth_query):
 
     if task == "trigger":
         if dataset in ['ccks', 'lic']:
-            return candidate_queries_trigger_chinese[nth_query]
+            return candidate_queries_trigger_chinese
         else:
-            return candidate_queries_trigger_chinese[nth_query]
+            return candidate_queries_trigger_english
     elif task=="role":
         pass
 
@@ -227,7 +156,8 @@ def convert_examples_to_features(
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
     nth_query=3,
-    language= "chinese",
+    dataset='ccks',
+    task='trigger'
 ):
     """ Loads a data file into a list of `InputBatch`s
         `cls_token_at_end` define the location of the CLS token:
@@ -248,11 +178,12 @@ def convert_examples_to_features(
         tokens = []
         start_label_ids = []
         end_label_ids = []
-        segment_ids = []
+        token_type_ids = []
         
         # query
-        query = get_query(dataset, task, language, nth_query)
-        for i in range(min(10, len(query))):
+        query_templates = get_query_templates(dataset, task)
+        query = query_templates[nth_query]
+        for i in range(len(query)):
             word = query[i]
             word_tokens = tokenizer.tokenize(word)
             if len(word_tokens)==1:
@@ -272,7 +203,7 @@ def convert_examples_to_features(
         tokens += [sep_token]
         start_label_ids += [[pad_token_label_id]]
         end_label_ids += [[pad_token_label_id]]
-        segment_ids = [sequence_a_segment_id] * len(tokens)
+        token_type_ids = [sequence_a_segment_id] * len(tokens)
 
         # paragraph
         for word, start_label, end_label in zip(example.words, example.start_labels, example.end_labels):
@@ -300,7 +231,7 @@ def convert_examples_to_features(
                 cur_end_label_ids.append(label_map[cur_end_label])
             end_label_ids.append(cur_end_label_ids)
 
-            segment_ids.append(sequence_b_segment_id)
+            token_type_ids.append(sequence_b_segment_id)
             # if len(tokens)!= len(label_ids):
             #     print(word, word_tokens, tokens, label_ids)
         # print(len(tokens),len(label_ids))
@@ -310,13 +241,13 @@ def convert_examples_to_features(
             tokens = tokens[: (max_seq_length - special_tokens_count)]
             start_label_ids = start_label_ids[: (max_seq_length - special_tokens_count)]
             end_label_ids = end_label_ids[: (max_seq_length - special_tokens_count)]
-            segment_ids = segment_ids[: (max_seq_length - special_tokens_count)]
+            token_type_ids = token_type_ids[: (max_seq_length - special_tokens_count)]
         
         # [SEP]
         tokens += [sep_token]
         start_label_ids += [[pad_token_label_id]]
         end_label_ids += [[pad_token_label_id]]
-        segment_ids += [sequence_b_segment_id]
+        token_type_ids += [sequence_b_segment_id]
 
 
         # The convention in BERT is:
@@ -343,46 +274,46 @@ def convert_examples_to_features(
             tokens += [sep_token]
             start_label_ids += [[pad_token_label_id]]
             end_label_ids += [[pad_token_label_id]]
-            segment_ids += [[sequence_b_segment_id]]
+            token_type_ids += [[sequence_b_segment_id]]
 
         if cls_token_at_end:
             tokens += [cls_token]
             start_label_ids += [[pad_token_label_id]]
             end_label_ids += [[pad_token_label_id]]
-            segment_ids += [cls_token_segment_id]
+            token_type_ids += [cls_token_segment_id]
         else:
             tokens = [cls_token] + tokens
             start_label_ids = [[pad_token_label_id]] + start_label_ids
             end_label_ids = [[pad_token_label_id]] + end_label_ids
-            segment_ids = [cls_token_segment_id] + segment_ids
+            token_type_ids = [cls_token_segment_id] + token_type_ids
 
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
         # print(len(tokens), len(input_ids), len(label_ids))
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
-        input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
+        attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
         # Zero-pad up to the sequence length.
         padding_length = max_seq_length - len(input_ids)
         if pad_on_left:
             input_ids = ([pad_token] * padding_length) + input_ids
-            input_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + input_mask
-            segment_ids = ([pad_token_segment_id] * padding_length) + segment_ids
+            attention_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + attention_mask
+            token_type_ids = ([pad_token_segment_id] * padding_length) + token_type_ids
             start_label_ids = ([[pad_token_label_id]] * padding_length) + start_label_ids
             end_label_ids = ([[pad_token_label_id]] * padding_length) + end_label_ids
         else:
             input_ids += [pad_token] * padding_length
-            input_mask += [0 if mask_padding_with_zero else 1] * padding_length
-            segment_ids += [pad_token_segment_id] * padding_length
+            attention_mask += [0 if mask_padding_with_zero else 1] * padding_length
+            token_type_ids += [pad_token_segment_id] * padding_length
             start_label_ids += [[pad_token_label_id]] * padding_length
             end_label_ids += [[pad_token_label_id]] * padding_length
         
         # print(len(label_ids), max_seq_length)
 
         assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
+        assert len(attention_mask) == max_seq_length
+        assert len(token_type_ids) == max_seq_length
         assert len(start_label_ids) == max_seq_length
         assert len(end_label_ids) == max_seq_length
 
@@ -391,13 +322,13 @@ def convert_examples_to_features(
             logger.info("id: %s", example.id)
             logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
             logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s", " ".join([str(x) for x in input_mask]))
-            logger.info("segment_ids: %s", " ".join([str(x) for x in segment_ids]))
+            logger.info("attention_mask: %s", " ".join([str(x) for x in attention_mask]))
+            logger.info("token_type_ids: %s", " ".join([str(x) for x in token_type_ids]))
             logger.info("start_label_ids: %s", " ".join([str(x) for x in start_label_ids]))
             logger.info("end_label_ids: %s", " ".join([str(x) for x in end_label_ids]))
 
         features.append(
-            InputFeatures(input_ids=input_ids, input_mask=input_mask, segment_ids=segment_ids, \
+            InputFeatures(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, \
                 start_label_ids=start_label_ids, end_label_ids= end_label_ids)
         )
     return features

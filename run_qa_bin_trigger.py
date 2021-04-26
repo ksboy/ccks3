@@ -24,7 +24,7 @@ import random
 
 import numpy as np
 import torch
-from seqeval.metrics import f1_score, precision_score, recall_score
+# from seqeval.metrics import f1_score, precision_score, recall_score
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
@@ -35,13 +35,14 @@ from transformers import (
     WEIGHTS_NAME,
     AdamW,
     AutoConfig,
-    AutoModelForTokenClassification,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenClassificationWithDiceLoss
+from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
-from utils_ner_bio import convert_examples_to_features, read_examples_from_file
+from utils_qa_bin_trigger import read_examples_from_file, convert_examples_to_features
+from utils_ner_bin import convert_label_ids_to_onehot, get_entities
+from metrics import f1_score, precision_score, recall_score
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -160,8 +161,8 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
 
     best_metric = 0 
     patience =0
-    for _ in train_iterator:
-        print(_, "epoch")
+    for iteration_index in train_iterator:
+        print("{} epoch".format(iteration_index))
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
 
@@ -172,11 +173,11 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
 
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
+            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "start_labels": batch[3], "end_labels": batch[4]}
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
+                )  # XLM and RoBERTa don"t use token_type_ids
 
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
@@ -205,12 +206,12 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                 model.zero_grad()
                 global_step += 1
 
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0  and iteration_index >= 0:
                     # Log metrics
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev")
+                        results, _, _, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev")
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
@@ -219,7 +220,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
 
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
-                        if best_metric != 0: patience += 1
+                        patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)
                         print("Current Metric", current_metric)
@@ -285,62 +286,78 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
     nb_eval_steps = 0
-    preds = None
-    out_label_ids = None
+    start_preds = None
     model.eval()
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
-            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
+            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "start_labels": batch[3], "end_labels": batch[4]}
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = (
                     batch[2] if args.model_type in ["bert", "xlnet"] else None
-                )  # XLM and RoBERTa don"t use segment_ids
+                )  # XLM and RoBERTa don"t use token_type_ids
             outputs = model(**inputs)
-            tmp_eval_loss, logits = outputs[:2]
+            tmp_eval_loss, (start_logits, end_logits) = outputs[:2]
 
             if args.n_gpu > 1:
                 tmp_eval_loss = tmp_eval_loss.mean()  # mean() to average on multi-gpu parallel evaluating
 
             eval_loss += tmp_eval_loss.item()
         nb_eval_steps += 1
-        if preds is None:
-            preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs["labels"].detach().cpu().numpy()
+        if start_preds is None:
+            token_type_ids = inputs["token_type_ids"].detach().cpu().numpy()
+            start_preds = start_logits.detach().cpu().numpy()
+            start_out_label_ids = inputs["start_labels"].detach().cpu().numpy()
+            end_preds = end_logits.detach().cpu().numpy()
+            end_out_label_ids = inputs["end_labels"].detach().cpu().numpy()
         else:
-            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-            out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
+            token_type_ids = np.append(token_type_ids, inputs["token_type_ids"].detach().cpu().numpy(), axis=0)
+            start_preds = np.append(start_preds, start_logits.detach().cpu().numpy(), axis=0)
+            start_out_label_ids = np.append(start_out_label_ids, inputs["start_labels"].detach().cpu().numpy(), axis=0)
+            end_preds = np.append(end_preds, end_logits.detach().cpu().numpy(), axis=0)
+            end_out_label_ids = np.append(end_out_label_ids, inputs["end_labels"].detach().cpu().numpy(), axis=0)
 
     eval_loss = eval_loss / nb_eval_steps
-    preds = np.argmax(preds, axis=2)
 
-    label_map = {i: label for i, label in enumerate(labels)}
+    def sigmoid(x):
+        s = 1 / (1 + np.exp(-x))
+        return s
 
-    out_label_list = [[] for _ in range(out_label_ids.shape[0])]
-    preds_list = [[] for _ in range(out_label_ids.shape[0])]
+    threshold = 0.5
+    start_preds = sigmoid(start_preds) > threshold 
+    end_preds = sigmoid(end_preds) > threshold
 
-    for i in range(out_label_ids.shape[0]):
-        for j in range(out_label_ids.shape[1]):
-            if out_label_ids[i, j] != pad_token_label_id:
-                out_label_list[i].append(label_map[out_label_ids[i][j]])
-                preds_list[i].append(label_map[preds[i][j]])
+    # start_out_label_ids.shape 1498*256*217 
+    batch_out_label_list= get_entities(start_out_label_ids, end_out_label_ids, token_type_ids)
+    batch_preds_list= get_entities(start_preds, end_preds, token_type_ids)
+    # print(batch_preds_list[:5])
+    # 变成 一维
+    # out_label_list = []
+    # preds_list = []
+    # for row_preds_list in batch_preds_list:
+    #     for pred in row_preds_list:
+    #         preds_list.append(pred)
+    # for row_out_label_list in batch_out_label_list:
+    #     for out_label in row_out_label_list:
+    #         out_label_list.append(out_label)
 
     results = {
         "loss": eval_loss,
-        "precision": precision_score(out_label_list, preds_list),
-        "recall": recall_score(out_label_list, preds_list),
-        "f1": f1_score(out_label_list, preds_list),
+        "precision":  precision_score(batch_out_label_list, batch_preds_list),
+        "recall": recall_score(batch_out_label_list, batch_preds_list),
+        "f1":  f1_score(batch_out_label_list, batch_preds_list),
     }
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
     
-    return results, preds_list
+    return results, batch_preds_list, start_logits.tolist(), end_logits.tolist()
 
 
 def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
+    # print(labels[:5], labels[-5:])
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
@@ -384,11 +401,12 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
 
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    all_label_ids = torch.tensor([f.label_ids for f in features], dtype=torch.long)
+    all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
+    all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    all_start_label_ids = torch.tensor([convert_label_ids_to_onehot(f.start_label_ids, labels) for f in features], dtype=torch.int8)
+    all_end_label_ids = torch.tensor([convert_label_ids_to_onehot(f.end_label_ids, labels) for f in features], dtype=torch.int8)
 
-    dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_start_label_ids, all_end_label_ids)
     return dataset
 
 
@@ -600,10 +618,11 @@ def main():
     set_seed(args)
 
     # Prepare CONLL-2003 task
-    labels = get_labels(args.schema, task=args.task)
+    labels = get_labels(args.schema, task=args.task, mode="classification")
+    # print(labels[:5], labels[-5:])
     num_labels = len(labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
-    pad_token_label_id = CrossEntropyLoss().ignore_index
+    pad_token_label_id = -100
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
@@ -687,7 +706,7 @@ def main():
         for checkpoint in checkpoints:
             model = AutoModelForTokenClassification.from_pretrained(checkpoint)
             model.to(args.device)
-            result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev", prefix=checkpoint)
+            result, predictions, start_logits, end_logits = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev", prefix=checkpoint)
             # Save results
             output_eval_results_file = os.path.join(checkpoint, "eval_results.txt")
             with open(output_eval_results_file, "w") as writer:
@@ -698,7 +717,13 @@ def main():
             results = []
             for prediction in predictions:
                 results.append({'labels':prediction})
-            write_file(results, output_eval_predictions_file)  
+            write_file(results, output_eval_predictions_file)
+            # Save logits
+            output_eval_logits_file = os.path.join(checkpoint, "eval_logits.json")
+            results = []
+            for start_logit, end_logit in zip(start_logits, end_logits):
+                results.append({'start_logits':start_logit,"end_logits":end_logit })
+            write_file(results, output_eval_logits_file)   
 
 
     if args.do_predict and args.local_rank in [-1, 0]:
@@ -706,7 +731,7 @@ def main():
         checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
         model = AutoModelForTokenClassification.from_pretrained(checkpoint)
         model.to(args.device)
-        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
+        result, predictions, start_logits, end_logits = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test")
         # Save results
         output_test_results_file = os.path.join(checkpoint, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
@@ -717,7 +742,13 @@ def main():
         results = []
         for prediction in predictions:
             results.append({'labels':prediction})
-        write_file(results,output_test_predictions_file)      
+        write_file(results,output_test_predictions_file) 
+        # Save logits
+        output_test_logits_file = os.path.join(checkpoint, "test_logits.json")
+        results = []
+        for start_logit, end_logit in zip(start_logits, end_logits):
+            results.append({'start_logits':start_logit,"end_logits":end_logit })
+        # write_file(results, output_test_logits_file)       
 
     return results
 
