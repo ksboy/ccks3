@@ -107,7 +107,7 @@ def role_process_bin_lic(input_file, add_event_type_to_role=False, is_predict=Fa
             results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
         for event in row["event_list"]:
-            event_type = event["type"]
+            event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
                 if add_event_type_to_role: role = event_type + '-' + role

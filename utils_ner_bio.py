@@ -110,7 +110,7 @@ def role_process_bio_lic(input_file, add_event_type_to_role=False, is_predict=Fa
             results.append({"id":row["id"], "words":list(row["text"]), "labels":labels})
             continue
         for event in row["event_list"]:
-            event_type = event["type"]
+            event_type = event["event_type"]
             for arg in event["arguments"]:
                 role = arg['role']
                 if add_event_type_to_role: role = event_type + '-' + role

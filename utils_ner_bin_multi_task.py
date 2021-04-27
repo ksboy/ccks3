@@ -66,7 +66,6 @@ def data_process_bin_ccks(input_file, add_event_type_to_role=False, is_predict=F
             event_type = event["type"]
             for arg in event["mentions"]:
                 role = arg['role']
-                if add_event_type_to_role: role = event_type + '-' + role
                 # trigger
                 if role=="trigger":
                     trigger_start_index, trigger_end_index = arg["span"]
@@ -82,6 +81,7 @@ def data_process_bin_ccks(input_file, add_event_type_to_role=False, is_predict=F
                     continue
 
                 # role
+                if add_event_type_to_role: role = event_type + '-' + role
                 argument_start_index, argument_end_index = arg["span"]
                 argument_end_index -= 1
                 if role_start_labels[argument_start_index]=="O":

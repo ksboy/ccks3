@@ -273,27 +273,27 @@ class LoggingCallback(pl.Callback):
         rank_zero_info("***** Validation results *****")
         metrics = trainer.callback_metrics
         # Log results
-        checkpoint_best_path = os.path.join(pl_module.hparams.output_dir, "checkpoint-best")
-        if not os.path.exists(checkpoint_best_path): os.makedirs(checkpoint_best_path)
-        output_eval_results_file = os.path.join(pl_module.hparams.output_dir, "checkpoint-best", "eval_results.txt")
-        with open(output_eval_results_file, "w") as writer:
-            for key in sorted(metrics):
-                if key not in ["log", "progress_bar"]:
-                    rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
-                    writer.write("{} = {}\n".format(key, str(metrics[key])))
+        # checkpoint_best_path = os.path.join(pl_module.hparams.output_dir, "checkpoint-best")
+        # if not os.path.exists(checkpoint_best_path): os.makedirs(checkpoint_best_path)
+        # output_eval_results_file = os.path.join(pl_module.hparams.output_dir, "eval_results.txt")
+        # with open(output_eval_results_file, "w") as writer:
+        for key in sorted(metrics):
+            if key not in ["log", "progress_bar"]:
+                rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
+                # writer.write("{} = {}\n".format(key, str(metrics[key])))
 
     def on_test_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
         rank_zero_info("***** Test results *****")
         metrics = trainer.callback_metrics
         # Log and save results to file
-        checkpoint_best_path = os.path.join(pl_module.hparams.output_dir, "checkpoint-best")
-        if not os.path.exists(checkpoint_best_path): os.makedirs(checkpoint_best_path)
-        output_test_results_file = os.path.join(pl_module.hparams.output_dir, "checkpoint-best", "test_results.txt")
-        with open(output_test_results_file, "w") as writer:
-            for key in sorted(metrics):
-                if key not in ["log", "progress_bar"]:
-                    rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
-                    writer.write("{} = {}\n".format(key, str(metrics[key])))
+        # checkpoint_best_path = os.path.join(pl_module.hparams.output_dir, "checkpoint-best")
+        # if not os.path.exists(checkpoint_best_path): os.makedirs(checkpoint_best_path)
+        # output_test_results_file = os.path.join(pl_module.hparams.output_dir, "test_results.txt")
+        # with open(output_test_results_file, "w") as writer:
+        for key in sorted(metrics):
+            if key not in ["log", "progress_bar"]:
+                rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
+                # writer.write("{} = {}\n".format(key, str(metrics[key])))
 
 
 def add_generic_args(parser, root_dir) -> None:
@@ -321,6 +321,7 @@ def add_generic_args(parser, root_dir) -> None:
     parser.add_argument("--n_tpu_cores", dest="tpu_cores", type=int)
     parser.add_argument("--max_grad_norm", dest="gradient_clip_val", default=1.0, type=float, help="Max gradient norm")
     parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
+    parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
     parser.add_argument("--do_predict", action="store_true", help="Whether to run predictions on the test set.")
     parser.add_argument(
         "--gradient_accumulation_steps",
@@ -359,11 +360,13 @@ def add_generic_args(parser, root_dir) -> None:
     )
 
     parser.add_argument(
-            "--monitor",
-            default='f1',
-            type=str,
-            help="CallBacks monitor Metric.",
-        )
+        "--monitor",
+        default='f1',
+        type=str,
+        help="CallBacks monitor Metric.",
+    )
+    parser.add_argument("--early_stop", default=4, type=int,
+            help="early stop when metric does not increases any more")
     
 
 
@@ -386,12 +389,12 @@ def generic_train(
     # add custom checkpoints
     if checkpoint_callback is None:
         checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            filepath=args.output_dir, prefix="checkpoint", monitor=args.monitor, mode="auto", save_top_k=1
+            filepath=args.output_dir, prefix="checkpoint", monitor=args.monitor, mode="max", save_top_k=1
         )
     if logging_callback is None:
         logging_callback = LoggingCallback()
     if early_stopping_callback is None:
-        early_stopping_callback = pl.callbacks.EarlyStopping(patience=3, monitor=args.monitor)
+        early_stopping_callback = pl.callbacks.EarlyStopping(patience=args.early_stop, monitor=args.monitor, mode="max")
 
     train_params = {}
 

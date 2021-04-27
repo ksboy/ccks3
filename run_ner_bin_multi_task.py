@@ -36,6 +36,7 @@ from transformers import (
     WEIGHTS_NAME,
     AdamW,
     AutoConfig,
+    AutoModelForTokenClassification,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )

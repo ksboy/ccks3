@@ -45,7 +45,7 @@ class InputExample(object):
         self.role_end_labels = role_end_labels
 
 ## ccks格式
-def data_process_bin_ccks(input_file, is_predict=False):
+def data_process_bin_ccks(input_file, add_event_type_to_role=True, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -92,6 +92,7 @@ def data_process_bin_ccks(input_file, is_predict=False):
                     for i in range(trigger_start_index, trigger_end_index+1):
                         token_type_ids[i] = 1
                     continue
+                if add_event_type_to_role: role = event_type + '-' + role
                 argument_start_index, argument_end_index = arg["span"]
                 argument_end_index -= 1
                 if role_start_labels[argument_start_index]=="O":
@@ -110,7 +111,7 @@ def data_process_bin_ccks(input_file, is_predict=False):
     return results
 
 # lic格式
-def data_process_bin_lic(input_file, is_predict=False):
+def data_process_bin_lic(input_file, add_event_type_to_role=True, is_predict=False):
     rows = open(input_file, encoding='utf-8').read().splitlines()
     results = []
     for row in rows:
@@ -154,6 +155,7 @@ def data_process_bin_lic(input_file, is_predict=False):
 
             for arg in event["arguments"]:
                 role = arg['role']
+                if add_event_type_to_role: role = event_type + '-' + role
                 argument = arg['argument']
                 argument_start_index = arg["argument_start_index"]
                 argument_end_index = argument_start_index + len(argument) -1
@@ -192,9 +194,9 @@ class InputFeatures(object):
 def read_examples_from_file(data_dir, mode, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        items = data_process_bin_ccks(file_path, mode!='train')
+        items = data_process_bin_ccks(file_path, add_event_type_to_role=True, is_predict= mode!='train')
     elif dataset=="lic":
-        items = data_process_bin_lic(file_path, mode!='train')
+        items = data_process_bin_lic(file_path, add_event_type_to_role=True, is_predict= mode!='train')
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(

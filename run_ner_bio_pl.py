@@ -204,13 +204,15 @@ class NERTransformer(BaseTransformer):
             required=True,
             help="Model type",
         )
-
-        parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
         parser.add_argument(
             "--evaluate_during_training",
             action="store_true",
             help="Whether to run evaluation during training at each logging step.",
         )
+        parser.add_argument(
+            "--overwrite_output_dir", action="store_true", help="Overwrite the content of the output directory"
+        )
+        ## tokenizer args
         parser.add_argument(
             "--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model."
         )
@@ -221,11 +223,6 @@ class NERTransformer(BaseTransformer):
             "--strip_accents", action="store_const", const=True, help="Set this flag if model is trained without accents."
         )
 
-        parser.add_argument("--early_stop", default=4, type=int,
-            help="early stop when metric does not increases any more")
-        parser.add_argument(
-            "--overwrite_output_dir", action="store_true", help="Overwrite the content of the output directory"
-        )
         return parser
 
 
@@ -237,20 +234,32 @@ if __name__ == "__main__":
     model = NERTransformer(args)
     trainer = generic_train(model, args)
 
-    # if args.do_eval:
-    #     # See https://github.com/huggingface/transformers/issues/3159
-    #     # pl use this format to create a checkpoint:
-    #     # https://github.com/PyTorchLightning/pytorch-lightning/blob/master\
-    #     # /pytorch_lightning/callbacks/model_checkpoint.py#L169
-    #     checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
-    #     model = model.load_from_checkpoint(checkpoint)
-    #     trainer.test(model)
+    if args.do_eval:
+        # See https://github.com/huggingface/transformers/issues/3159
+        # pl use this format to create a checkpoint:
+        # https://github.com/PyTorchLightning/pytorch-lightning/blob/master\
+        # /pytorch_lightning/callbacks/model_checkpoint.py#L169
+        # trainer.test(ckpt_path="best")
+
+        checkpoints = list(sorted(glob.glob(os.path.join(args.output_dir, "checkpointepoch=*.ckpt"), recursive=True)))
+        model = model.load_from_checkpoint(checkpoints[-1])
+        results = trainer.test(model, model.val_dataloader())
+        output_eval_results_file = os.path.join(args.output_dir, "checkpoint-best", "eval_results.txt")
+        with open(output_eval_results_file, "w") as writer:
+            for key in sorted(results.keys()):
+                writer.write("{} = {}\n".format(key, str(results[key])))
 
     if args.do_predict:
         # See https://github.com/huggingface/transformers/issues/3159
         # pl use this format to create a checkpoint:
         # https://github.com/PyTorchLightning/pytorch-lightning/blob/master\
         # /pytorch_lightning/callbacks/model_checkpoint.py#L169
-        checkpoint = os.path.join(args.output_dir, 'checkpoint-best')
-        model = model.load_from_checkpoint(checkpoint)
-        trainer.test(model)
+        # trainer.test(ckpt_path="best")
+        
+        checkpoints = list(sorted(glob.glob(os.path.join(args.output_dir, "checkpointepoch=*.ckpt"), recursive=True)))
+        model = model.load_from_checkpoint(checkpoints[-1])
+        results = trainer.test(model)
+        output_test_results_file = os.path.join(args.output_dir, "checkpoint-best", "test_results.txt")
+        with open(output_test_results_file, "w") as writer:
+            for key in sorted(results.keys()):
+                writer.write("{} = {}\n".format(key, str(results[key])))

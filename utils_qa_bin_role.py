@@ -96,7 +96,7 @@ def role_process_bin_ccks(input_file, schema_file, is_predict=False):
     return results
 
 ## lic格式
-def role_process_bin_lic(schema_file, input_file, is_predict=False):
+def role_process_bin_lic(input_file, schema_file, is_predict=False):
     role_dict = {}
     rows = open(schema_file, encoding='utf-8').read().splitlines()
     for row in rows:
@@ -120,10 +120,10 @@ def role_process_bin_lic(schema_file, input_file, is_predict=False):
             results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
         for event in row["event_list"]:
-            event_type = event["type"]
+            event_type = event["event_type"]
             for gold_role in role_dict[event_type]:
-                start_labels = ['O']*len(row["text"]) 
-                end_labels = ['O']*len(row["text"])
+                start_labels = [0]*len(row["text"]) 
+                end_labels = [0]*len(row["text"])
                 for arg in event["arguments"]:
                     role = arg['role']
                     if role!=gold_role: continue
@@ -133,7 +133,7 @@ def role_process_bin_lic(schema_file, input_file, is_predict=False):
                     start_labels[argument_start_index] = 1
                     end_labels[argument_end_index] = 1 
 
-                results.append({"id":row["id"], "words":list(row["content"]), "event_type":event_type, "role":gold_role, \
+                results.append({"id":row["id"], "words":list(row["text"]), "event_type":event_type, "role":gold_role, \
                     "start_labels":start_labels, "end_labels":end_labels})
     return results
 
@@ -151,23 +151,58 @@ def get_query_templates(query_file):
     """Load query templates"""
     query_templates = dict()
     with open(query_file, "r", encoding='utf-8') as f:
+        next(f)
         for line in f:
-            event_type, role, description, query = line.strip().split(",")
+            event_type, role, role_chinese, description, role_type = line.strip().split(",")
             if event_type not in query_templates:
                 query_templates[event_type] = dict()
             if role not in query_templates[event_type]:
                 query_templates[event_type][role] = list()
 
-            # 0 template role
-            query_templates[event_type][role].append(role)
-            # 1 template role + in trigger (replace [trigger] when forming the instance)
-            query_templates[event_type][role].append(role + " in [trigger]")
-            # 2 template arg_query
-            query_templates[event_type][role].append(query)
-            # 3 arg_query + trigger (replace [trigger] when forming the instance)
-            query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
+            # 0 
+            query_templates[event_type][role].append(role_chinese)
+            # 1
+            query_templates[event_type][role].append(event_type + " "+ role_chinese)
+            # 2 
+            query_templates[event_type][role].append(role+ " "+ description)
+            # 3 
+            query_templates[event_type][role].append(event_type + " " + role+ " "+ description)
+            
+            # query_templates[event_type][role].append(role + " in [trigger]")
+            # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
     return query_templates
 
+def get_query_templates(dataset, task):
+    """Load query templates"""
+    query_file = "./query_template/"+dataset+".csv"
+    query_templates = dict()
+    with open(query_file, "r", encoding='utf-8') as f:
+        next(f)
+        for line in f:
+            if dataset == "ccks":
+                event_type, role, role_chinese, description, role_type = line.strip().split(",")
+            elif dataset == 'lic':
+                event_type, role = line.strip().split(",")
+                role_chinese, description, role_type = "", "", ""
+
+            if event_type not in query_templates:
+                query_templates[event_type] = dict()
+            if role not in query_templates[event_type]:
+                query_templates[event_type][role] = list()
+
+            # 0 
+            query_templates[event_type][role].append(role_chinese)
+            # 1
+            query_templates[event_type][role].append(event_type + " "+ role_chinese)
+            # 2 
+            query_templates[event_type][role].append(role+ " "+ description)
+            # 3 
+            query_templates[event_type][role].append(event_type + " " + role+ " "+ description)
+            
+            # query_templates[event_type][role].append(role + " in [trigger]")
+            # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
+    return query_templates
+    
 def convert_examples_to_features(
     examples,
     label_list,
@@ -185,7 +220,7 @@ def convert_examples_to_features(
     sequence_a_segment_id=0,
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
-    nth_query=2,
+    nth_query=3,
     dataset='ccks',
     task='trigger'
 ):
@@ -208,7 +243,7 @@ def convert_examples_to_features(
         token_type_ids = []
         
         # query
-        query_templates = get_query_templates("./query_template/"+dataset+".csv")
+        query_templates = get_query_templates(dataset, task)
         event_type, role = example.event_type, example.role
         query = query_templates[event_type][role][nth_query]
 

@@ -8,6 +8,7 @@ model = BertModel.from_pretrained("/home/whou/workspace/pretrained_models/chines
 output = model(**input)
 print(output[0])
 
+from pytorch_lightning.callbacks import early_stopping
 # from scipy.special import softmax
 # aList = [2.3, -2.3]
 # print(softmax(aList))

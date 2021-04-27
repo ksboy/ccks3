@@ -221,7 +221,7 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
 
         #######################################################
         ## trigger
-        # sequence_output = self.dropout(sequence_output)
+        sequence_output = self.dropout(sequence_output)
         trigger_start_logits = self.trigger_start_classifier(sequence_output)
         trigger_end_logits = self.trigger_end_classifier(sequence_output)
 
@@ -404,7 +404,7 @@ class BertForTokenBinaryClassificationMultiTask(BertPreTrainedModel):
 
         #######################################################
         ## trigger
-        # sequence_output = self.dropout(sequence_output)
+        sequence_output = self.dropout(sequence_output)
         trigger_start_logits = self.trigger_start_classifier(sequence_output)
         trigger_end_logits = self.trigger_end_classifier(sequence_output)
 

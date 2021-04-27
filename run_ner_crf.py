@@ -39,7 +39,7 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenClassificationWithDiceLoss, BertCRFForTokenClassification
+from model import BertCRFForTokenClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
 from utils_ner_bio import convert_examples_to_features, read_examples_from_file
 

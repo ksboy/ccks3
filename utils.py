@@ -188,13 +188,32 @@ def read_write(input_file, output_file):
         results.append(row)
     write_file(results, output_file)
 
+def get_template(input_file="./data/DuEE_1_0/event_schema.json", output_file="./query_template/lic.csv"):
+    lines = []
+    lines.append("event_type,role\n")
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    for row in rows:
+        row = json.loads(row)
+        event_type = row["event_type"]
+        for role in row["role_list"]:
+            line = []
+            role = role['role']
+            line = ','.join([event_type, role]) + "\n"
+            lines.append(line)
+    outf = open(output_file, "w", encoding='utf8')
+    outf.writelines(lines)
+    outf.close()
+    
+
 if __name__ == '__main__':
-    labels = get_labels(path="./data/DuEE_1_0/event_schema.json", task='role', mode="classification")
-    print(len(labels))
+    # labels = get_labels(path="./data/DuEE_1_0/event_schema.json", task='role', mode="classification")
+    # print(len(labels))
     
 
     # get_num_of_arguments("./results/test_pred_bin_segment.json")
 
     # read_write("./output/eval_pred.json", "./results/eval_pred.json")
     # read_write("./results/test1.trigger.pred.json", "./results/paddle.trigger.json")
+
+    get_template()
     pass
