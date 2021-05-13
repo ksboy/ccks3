@@ -17,7 +17,7 @@ role,english,chinese,description,type
 股份股权转让,money,转让交易金额,,number
 股份股权转让,number,转让数量,,number
 股份股权转让,proportion,转让比例,,number
-股份股权转让,Target-company,标的公司,收购行为中的收购对象公司,per-org
+股份股权转让,target-company,标的公司,收购行为中的收购对象公司,per-org
 起诉,sub-per,原告（个人）,,per-org
 起诉,sub-org,原告（公司）,,per-org
 起诉,obj-per,被告（个人）,,per-org
@@ -32,7 +32,7 @@ role,english,chinese,description,type
 减持,date,减持日期,,time
 减持,share-per,减持的股份占个人股份百分比,,number
 减持,share-org,减持的股份占公司股份的百分比,,number
-减持,org,减持方所在组织或单位,,per-org
+减持,obj,减持方所在组织或单位,,per-org
 收购,sub-org,收购公司,发起收购的公司,per-org
 收购,sub-per,收购方,发起收购的个人,per-org
 收购,obj-org,被收购公司,接受收购的公司,per-org

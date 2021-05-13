@@ -291,6 +291,7 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
     logger.info("  Batch size = %d", args.eval_batch_size)
     model.eval()
 
+    count = 0
     with torch.no_grad():
         results = []
         for row in  tqdm(rows, mode):
@@ -313,6 +314,7 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
                 trigger_end_index -= 1 
                 trigger = text[trigger_start_index: trigger_end_index+1]
                 event_type = trigger_labels[event_type_id]
+                target_role_labels = get_labels(args.schema, task="role", mode="classification", target_event_type=event_type)
                 arguments = [{"role": "trigger","span":[trigger_start_index, trigger_start_index+1], "word": trigger}]
                 for role_data in role_data_list:
                     _, argument_start_index, argument_end_index, role_id = role_data
@@ -320,10 +322,17 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
                     argument_end_index -= 1
                     argument = text[argument_start_index:argument_end_index+1]
                     role = role_labels[role_id]
+                    # 去除非法 role 
+                    if role not in target_role_labels:
+                        count += 1
+                        continue
+                    # 删除前缀： event_type+"-"
+                    role = role.lstrip(event_type+"-")
                     arguments.append({"word": argument, "span": [argument_start_index, argument_end_index+1], "role": role})
                 events.append({ "type": event_type, "mentions":arguments })
             results.append({'id':data['id'], "events":events})
     
+    print(count)
     output_dir = os.path.join(args.output_dir, "checkpoint-best")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)

@@ -1,14 +1,14 @@
-from transformers import BertTokenizer, BertTokenizerFast, BertModel, BertForSequenceClassification, BertForQuestionAnswering
-# from transformers import glue_convert_examples_to_features
-tokenizer = BertTokenizer.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/" ,\
-    tokenize_chinese_chars=True)
-input = tokenizer.batch_encode_plus([["我是","你好"]], max_length=10, pad_to_max_length=True, return_tensors='pt')
-print(input)
-model = BertModel.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/")
-output = model(**input)
-print(output[0])
+# from transformers import BertTokenizer, BertTokenizerFast, BertModel, BertForSequenceClassification, BertForQuestionAnswering
+# # from transformers import glue_convert_examples_to_features
+# tokenizer = BertTokenizer.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/" ,\
+#     tokenize_chinese_chars=True)
+# input = tokenizer.batch_encode_plus([["我是","你好"]], max_length=10, pad_to_max_length=True, return_tensors='pt')
+# print(input)
+# model = BertModel.from_pretrained("/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/")
+# output = model(**input)
+# print(output[0])
 
-from pytorch_lightning.callbacks import early_stopping
+# from pytorch_lightning.callbacks import early_stopping
 # from scipy.special import softmax
 # aList = [2.3, -2.3]
 # print(softmax(aList))
@@ -43,3 +43,9 @@ from pytorch_lightning.callbacks import early_stopping
 # infile = open("./data/ACE05/dev_process.json").read()
 # tmp = json.loads(infile)
 # print(tmp)
+
+# from torch.nn.functional import relu
+# a = [1]
+# print(relu(a))
+
+import torch.nn.utils

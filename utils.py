@@ -31,7 +31,7 @@ def remove_duplication(alist):
     return res
 
 
-def get_labels(path="./data/event_schema.json", task='trigger', mode="ner", add_event_type_to_role=True):
+def get_labels(path="./data/event_schema.json", task='trigger', mode="ner", target_event_type='', add_event_type_to_role=True):
     if not path:
         if mode=='ner':
             return ["O", "B-ENTITY", "I-ENTITY"]
@@ -52,7 +52,7 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner", add_
                 labels.append(event_type)
         return remove_duplication(labels)
 
-    elif task=='role':
+    elif task=='role' and target_event_type=='':
         labels = []
         rows = open(path, encoding='utf-8').read().splitlines()
         if mode == "ner": labels.append('O')
@@ -69,16 +69,17 @@ def get_labels(path="./data/event_schema.json", task='trigger', mode="ner", add_
         return remove_duplication(labels)
         
     # 特定类型事件 [TASK] 中的角色
-    else:
+    elif task=='role' and target_event_type!='':
         labels = []
         rows = open(path, encoding='utf-8').read().splitlines()
         if mode == "ner": labels.append('O')
         for row in rows:
             row = json.loads(row)
-            if row['event_type']!=task:
+            event_type = row["event_type"]
+            if event_type!=target_event_type:
                 continue
             for role in row["role_list"]:
-                role_type = role['role']
+                role_type = role['role'] if not add_event_type_to_role else event_type + '-' + role['role']
                 if mode == "ner":
                     labels.append("B-{}".format(role_type))
                     labels.append("I-{}".format(role_type))
@@ -206,8 +207,8 @@ def get_template(input_file="./data/DuEE_1_0/event_schema.json", output_file="./
     
 
 if __name__ == '__main__':
-    # labels = get_labels(path="./data/DuEE_1_0/event_schema.json", task='role', mode="classification")
-    # print(len(labels))
+    labels = get_labels(path="./data/FewFC-main/event_schema/trans.json", task='role', mode="classification", target_event_type='收购')
+    print(labels)
     
 
     # get_num_of_arguments("./results/test_pred_bin_segment.json")
@@ -215,5 +216,5 @@ if __name__ == '__main__':
     # read_write("./output/eval_pred.json", "./results/eval_pred.json")
     # read_write("./results/test1.trigger.pred.json", "./results/paddle.trigger.json")
 
-    get_template()
+    # get_template()
     pass

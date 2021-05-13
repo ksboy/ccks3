@@ -183,7 +183,7 @@ def get_query_templates(dataset, task):
                 event_type, role, role_chinese, description, role_type = line.strip().split(",")
             elif dataset == 'lic':
                 event_type, role = line.strip().split(",")
-                role_chinese, description, role_type = "", "", ""
+                role_chinese, description, role_type = role, "", ""
 
             if event_type not in query_templates:
                 query_templates[event_type] = dict()
@@ -195,9 +195,9 @@ def get_query_templates(dataset, task):
             # 1
             query_templates[event_type][role].append(event_type + " "+ role_chinese)
             # 2 
-            query_templates[event_type][role].append(role+ " "+ description)
+            query_templates[event_type][role].append(role_chinese+ " "+ description)
             # 3 
-            query_templates[event_type][role].append(event_type + " " + role+ " "+ description)
+            query_templates[event_type][role].append(event_type + " " + role_chinese+ " "+ description)
             
             # query_templates[event_type][role].append(role + " in [trigger]")
             # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
@@ -231,6 +231,7 @@ def convert_examples_to_features(
         `cls_token_segment_id` define the segment id associated to the CLS token (0 for BERT, 2 for XLNet)
     """
 
+    query_templates = get_query_templates(dataset, task)
     features = []
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
@@ -243,7 +244,6 @@ def convert_examples_to_features(
         token_type_ids = []
         
         # query
-        query_templates = get_query_templates(dataset, task)
         event_type, role = example.event_type, example.role
         query = query_templates[event_type][role][nth_query]
 
