@@ -49,3 +49,6 @@
 # print(relu(a))
 
 import torch.nn.utils
+
+path = "./output/lic/role_bin2_with_gate_sujianlin_sigmoid/checkpoint-best/training_args.bin"
+print( torch.load(path) )

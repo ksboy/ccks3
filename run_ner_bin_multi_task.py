@@ -96,13 +96,13 @@ def train(args, train_dataset, model, tokenizer, trigger_labels, role_labels, pa
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
 
-    # Check if saved optimizer or scheduler states exist
-    if os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt")) and os.path.isfile(
-        os.path.join(args.model_name_or_path, "scheduler.pt")
-    ):
-        # Load in optimizer and scheduler states
-        optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
-        scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
+    # # Check if saved optimizer or scheduler states exist
+    # if os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt")) and os.path.isfile(
+    #     os.path.join(args.model_name_or_path, "scheduler.pt")
+    # ):
+    #     # Load in optimizer and scheduler states
+    #     optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
+    #     scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
 
     if args.fp16:
         try:
@@ -686,10 +686,20 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         **tokenizer_args,
     )
+
+    unexpected_keys = ['role_start_classifier.weight', 'role_start_classifier.bias', 'role_end_classifier.weight', 'role_end_classifier.bias', \
+        'trigger_start_classifier.weight', 'trigger_start_classifier.bias', 'trigger_end_classifier.weight', 'trigger_end_classifier.bias']
+    state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
+    # for key in state_dict.keys():
+    #     print(key)
+    for key in unexpected_keys:
+        state_dict.pop(key, None)
+
     model = AutoModelForTokenClassification.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
+        state_dict = state_dict,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
 

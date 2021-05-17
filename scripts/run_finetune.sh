@@ -1,29 +1,29 @@
 MAX_LENGTH=256
-DATASET=lic
+DATASET=ccks
 TASK=role
-DOMAIN=base
-MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-# MODEL=./output/trigger_base/0/  finetune
-DATA_DIR=./data/DuEE_1_0/
-SCHEMA=./data/DuEE_1_0/event_schema.json
-OUTPUT_DIR=./output/$DATASET/role_bin2_with_gate_sujianlin_sigmoid/
-# DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
-# SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
-# OUTPUT_DIR=./output/$DATASET/$DOMAIN/multi_task/
+DOMAIN=few
+# MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
+MODEL=./output/ccks/base/multi_task/checkpoint-best/ # finetune
+# DATA_DIR=./data/DuEE_1_0/
+# SCHEMA=./data/DuEE_1_0/event_schema.json
+# OUTPUT_DIR=./output/$DATASET/role_bin2_with_gate_whou_roberta_large_relu/
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
+SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/$DATASET/base-\>few/multi_task/
 BATCH_SIZE=16
 # BATCH_SIZE = batch_size * num_gpus
 EVAL_BATCH_SIZE=64
-NUM_EPOCHS=45
-SAVE_STEPS=300 # 100
+NUM_EPOCHS=1000
+SAVE_STEPS=50 # 100
 # SAVE_STEPS= save_steps * gradient_accumulation_steps
-WARMUP_STEPS=100
+WARMUP_STEPS=50
 SEED=1
-LR=3e-5
+LR=2e-5
 
 mkdir -p $OUTPUT_DIR
 # CUDA_VISIBLE_DEVICES=0,1 nohup python -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_qa_bin_role.py \
 # CUDA_VISIBLE_DEVICES=0,1 nohup python -u -m torch.distributed.launch --nproc_per_node=2 run_qa_bin_role.py --local_rank 0 \
-CUDA_VISIBLE_DEVICES=0 nohup python -u run_ner_bin.py \
+CUDA_VISIBLE_DEVICES=0 nohup python -u run_ner_bin_multi_task.py \
 --dataset $DATASET \
 --task $TASK \
 --model_type bert \
@@ -52,4 +52,3 @@ CUDA_VISIBLE_DEVICES=0 nohup python -u run_ner_bin.py \
 # --fp16 \
 # --freeze 
 # --eval_all_checkpoints \
-

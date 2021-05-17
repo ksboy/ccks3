@@ -614,6 +614,18 @@ class BertForTokenBinaryClassificationWithGate(BertPreTrainedModel):
         self.global_classifier = nn.Linear(config.hidden_size, 1) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, 1
 
         self.activation = nn.ReLU()
+        # 激活函数
+        # 0-1 激活 
+        # 梯度不反向传播
+        # global_logits[global_logits < 0] = 0
+        # global_logits[global_logits > 0] = 1
+        # 梯度不反向传播
+        # global_logits = torch.relu(torch.sign(global_logits))
+
+        # relu 激活
+        # 收敛速度快，效果好
+
+        # sigmoid 激活
 
         self.start_classifier = nn.Linear(config.hidden_size, config.num_labels) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, num_labels
         self.end_classifier = nn.Linear(config.hidden_size, config.num_labels)
@@ -649,18 +661,6 @@ class BertForTokenBinaryClassificationWithGate(BertPreTrainedModel):
         # whou
         global_logits = self.global_classifier(sequence_output)
 
-        # 激活函数
-        # 0-1 激活 
-        # 梯度不反向传播
-        # global_logits[global_logits < 0] = 0
-        # global_logits[global_logits > 0] = 1
-        # 梯度不反向传播
-        # global_logits = torch.relu(torch.sign(global_logits))
-
-        # relu 激活
-        # 收敛速度快，效果好
-
-        # sigmoid 激活
         global_logits = self.activation(global_logits)
 
         start_logits = self.start_classifier(sequence_output) * global_logits
