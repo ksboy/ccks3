@@ -220,6 +220,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
 
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
+                        if best_metric != 0: patience += 1
                         patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)

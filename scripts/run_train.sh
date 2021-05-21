@@ -1,12 +1,14 @@
 MAX_LENGTH=256
-DATASET=lic
+DATASET=ccks
 TASK=role
 DOMAIN=base
 MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-# MODEL=./output/trigger_base/0/  finetune
-DATA_DIR=./data/DuEE_1_0/
-SCHEMA=./data/DuEE_1_0/event_schema.json
-OUTPUT_DIR=./output/$DATASET/role_bin2_with_gate_sujianlin_sigmoid/
+# MODEL=./output/$DATASET/$DOMAIN/role_bin_whou_relu/checkpoint-best   # finetune
+# DATA_DIR=./data/DuEE_1_0/
+# SCHEMA=./data/DuEE_1_0/event_schema.json
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
+SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/$DATASET/$DOMAIN/role_bin_whou_relu/
 # DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
 # SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
 # OUTPUT_DIR=./output/$DATASET/$DOMAIN/multi_task/
@@ -28,7 +30,6 @@ CUDA_VISIBLE_DEVICES=0 nohup python -u run_ner_bin.py \
 --task $TASK \
 --model_type bert \
 --model_name_or_path $MODEL \
---do_train \
 --do_eval \
 --evaluate_during_training \
 --data_dir $DATA_DIR \

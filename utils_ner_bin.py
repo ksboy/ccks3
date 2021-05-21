@@ -358,25 +358,26 @@ def convert_label_ids_to_onehot(label_ids,label_list):
     return one_hot_labels
 
 import numpy as np
-def get_entities(start_logits, end_logits, attention_mask=None):
+def get_entities(start_logits, end_logits, mask=None):
     # start_logits: [batch_size, seq_length, labels]
     if len(start_logits.shape) < 3:
         start_logits = np.expand_dims(start_logits, -1)
         end_logits = np.expand_dims(end_logits, -1)
-    if attention_mask is None:
-        attention_mask = np.ones(start_logits.shape[:-1])
+    if mask is None:
+        mask = np.ones(start_logits.shape[:-1])
     batch_size, seq_length, num_labels = start_logits.shape
     batch_pred_list = []
     dis = 12
     for i in range(batch_size):   # batch_index
         cur_pred_list=[]
         for j in range(seq_length):  # token_index 
-            if not attention_mask[i, j]: continue
+            if not mask[i, j]: continue
             # 实体 头
             for k in range(num_labels):  
                 if start_logits[i][j][k]:
-                    # 寻找 实体尾 
+                    # 实体尾 
                     for l in range(j, min(j+ dis, seq_length)):
+                        if not mask[i, l]: continue
                         if end_logits[i][l][k]:
                             cur_pred_list.append((i, j, l, k)) # index, start, end, label
                             break
