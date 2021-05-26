@@ -602,6 +602,10 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
+    
+    # model config
+    parser.add_argument("--with_gate", type=bool, default=True, help="")
+
     args = parser.parse_args()
 
     if (
@@ -672,13 +676,17 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    our_config = {"trigger_num_labels":num_trigger_labels,
+    our_config = {
+        "trigger_num_labels":num_trigger_labels,
         "role_num_labels":num_role_labels,
         "trigger_id2label":{str(i): label for i, label in enumerate(trigger_labels)},
         "trigger_label2id":{label: i for i, label in enumerate(trigger_labels)},
         "role_id2label":{str(i): label for i, label in enumerate(role_labels)},
-        "role_label2id":{label: i for i, label in enumerate(role_labels)},}
+        "role_label2id":{label: i for i, label in enumerate(role_labels)},
+        "with_gate": args.with_gate
+    }
     config.update(our_config)
+    # config.update(vars(args))
 
     tokenizer_args = {k: v for k, v in vars(args).items() if v is not None and k in TOKENIZER_ARGS}
     logger.info("Tokenizer arguments: %s", tokenizer_args)
@@ -687,14 +695,17 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         **tokenizer_args,
     )
-
-    unexpected_keys = ['role_start_classifier.weight', 'role_start_classifier.bias', 'role_end_classifier.weight', 'role_end_classifier.bias', \
-        'trigger_start_classifier.weight', 'trigger_start_classifier.bias', 'trigger_end_classifier.weight', 'trigger_end_classifier.bias']
-    state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
-    # for key in state_dict.keys():
-    #     print(key)
-    for key in unexpected_keys:
-        state_dict.pop(key, None)
+    
+    if os.path.exists(os.path.join(args.model_name_or_path, "pytorch_model.bin")):
+        unexpected_keys = ['role_start_classifier.weight', 'role_start_classifier.bias', 'role_end_classifier.weight', 'role_end_classifier.bias', \
+            'trigger_start_classifier.weight', 'trigger_start_classifier.bias', 'trigger_end_classifier.weight', 'trigger_end_classifier.bias']
+        state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
+        # for key in state_dict.keys():
+        #     print(key)
+        for key in unexpected_keys:
+            state_dict.pop(key, None)
+    else:
+        state_dict = None
 
     model = AutoModelForTokenClassification.from_pretrained(
         args.model_name_or_path,

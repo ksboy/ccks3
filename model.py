@@ -375,6 +375,10 @@ class BertForTokenBinaryClassificationMultiTask(BertPreTrainedModel):
         self.role_start_classifier = nn.Linear(config.hidden_size, config.role_num_labels)
         self.role_end_classifier = nn.Linear(config.hidden_size, config.role_num_labels)
 
+        if self.config.with_gate:  
+            self.global_classifier = nn.Linear(config.hidden_size, 1) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, 1
+            self.activation = nn.ReLU()
+
         self.init_weights()
 
     def forward(
@@ -438,8 +442,15 @@ class BertForTokenBinaryClassificationMultiTask(BertPreTrainedModel):
         #######################################################
         ## role  
         # sequence_output_role = self.dropout(sequence_output)
-        role_start_logits = self.role_start_classifier(sequence_output)
-        role_end_logits = self.role_end_classifier(sequence_output)
+        
+        if self.config.with_gate:  
+            global_logits = self.global_classifier(sequence_output)
+            global_logits = self.activation(global_logits)
+            role_start_logits = self.role_start_classifier(sequence_output) * global_logits
+            role_end_logits = self.role_end_classifier(sequence_output) * global_logits
+        else: 
+            role_start_logits = self.role_start_classifier(sequence_output)
+            role_end_logits = self.role_end_classifier(sequence_output)
 
         if role_start_labels is not None and role_end_labels is not None:
             # loss_fct = CrossEntropyLoss()
@@ -528,104 +539,26 @@ class BertForTokenBinaryClassification(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.start_classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.end_classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        self.init_weights()
+        if self.config.with_gate:  
+            # # 判断 当前 句子 是否存在 某种类型的实体：苏剑林 (使用 cls_embedding)
+            # self.global_classifier = nn.Linear(config.hidden_size, config.num_labels) # batch_size, hidden_size -> batch_size, num_labels
+            # 判断 当前 token 是否是 实体（任意类型）：whou
+            self.global_classifier = nn.Linear(config.hidden_size, 1) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, 1
 
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        start_labels=None, # batch* num_class* seq_length
-        end_labels=None,
-    ):
+            self.activation = nn.ReLU()
+            # 激活函数
+            # 0-1 激活 
+            # 梯度不反向传播
+            # global_logits[global_logits < 0] = 0
+            # global_logits[global_logits > 0] = 1
+            # 梯度不反向传播
+            # global_logits = torch.relu(torch.sign(global_logits))
 
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-        )
+            # relu 激活
+            # 收敛速度快，效果好
 
-        sequence_output = outputs[0]
-
-        sequence_output = self.dropout(sequence_output)
-
-        start_logits = self.start_classifier(sequence_output)
-        end_logits = self.end_classifier(sequence_output)
-
-        outputs = ([start_logits, end_logits],) + outputs[2:]  # add hidden states and attention if they are here
-        if start_labels is not None and end_labels is not None:
-            # loss_fct = CrossEntropyLoss()
-            # loss_fct = FocalLoss(class_num=self.num_labels)
-            loss_fct = BCEWithLogitsLoss(reduction="none")
-            # Only keep active parts of the loss
-            if attention_mask is not None:
-                active_loss = attention_mask.view(-1) == 1
-                active_start_logits = start_logits.view(-1, self.num_labels)
-                active_end_logits = end_logits.view(-1, self.num_labels)
-
-                active_start_labels = start_labels.view(-1, self.num_labels)
-                active_end_labels = end_labels.view(-1, self.num_labels)
-                # attention_mask: 
-                # ignore_index: [cls], [sep]
-                # non_index: no label
-
-                # print(active_loss, active_loss.shape, \
-                #      active_logits,active_logits.shape,\
-                #      active_labels,active_labels.shape,\
-                #      labels, labels.shape)
-                #2048 2048*435 2048 8*256 
-                start_loss = loss_fct(active_start_logits, active_start_labels.float())
-                active_loss = active_loss.float()
-                start_loss = start_loss * (active_loss.unsqueeze(-1))
-                start_loss = torch.sum(start_loss)/torch.sum(active_loss)
-
-                end_loss = loss_fct(active_end_logits, active_end_labels.float())
-                end_loss = end_loss * (active_loss.unsqueeze(-1))
-                end_loss = torch.sum(end_loss)/torch.sum(active_loss)
-
-
-            else:
-                start_loss = loss_fct(start_logits.view(-1, self.num_labels), start_labels.view(-1))
-                end_loss = loss_fct(end_logits.view(-1, self.num_labels), end_labels.view(-1))
-            outputs = (start_loss+ end_loss,) + outputs
-
-        return outputs  # (loss), scores, (hidden_states), (attentions)
-
-class BertForTokenBinaryClassificationWithGate(BertPreTrainedModel):
-    def __init__(self, config):
-        super().__init__(config)
-        self.num_labels = config.num_labels
-
-        self.bert = BertModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-        # # 判断 当前 句子 是否存在 某种类型的实体：苏剑林 (使用 cls_embedding)
-        # self.global_classifier = nn.Linear(config.hidden_size, config.num_labels) # batch_size, hidden_size -> batch_size, num_labels
-        # 判断 当前 token 是否是 实体（任意类型）：whou
-        self.global_classifier = nn.Linear(config.hidden_size, 1) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, 1
-
-        self.activation = nn.ReLU()
-        # 激活函数
-        # 0-1 激活 
-        # 梯度不反向传播
-        # global_logits[global_logits < 0] = 0
-        # global_logits[global_logits > 0] = 1
-        # 梯度不反向传播
-        # global_logits = torch.relu(torch.sign(global_logits))
-
-        # relu 激活
-        # 收敛速度快，效果好
-
-        # sigmoid 激活
+            # sigmoid 激活
 
         self.start_classifier = nn.Linear(config.hidden_size, config.num_labels) # batch_size, max_seq_length, hidden_size -> batch_size, max_seq_length, num_labels
         self.end_classifier = nn.Linear(config.hidden_size, config.num_labels)
@@ -656,15 +589,19 @@ class BertForTokenBinaryClassificationWithGate(BertPreTrainedModel):
         sequence_output = outputs[0]
         sequence_output = self.dropout(sequence_output)
         
-        # # 苏剑林
-        # global_logits = self.global_classifier(sequence_output[:,0,:]).unsqueeze(-2)
-        # whou
-        global_logits = self.global_classifier(sequence_output)
+        if self.config.with_gate:  
+            # # 苏剑林
+            # global_logits = self.global_classifier(sequence_output[:,0,:]).unsqueeze(-2)
+            # whou
+            global_logits = self.global_classifier(sequence_output)
 
-        global_logits = self.activation(global_logits)
+            global_logits = self.activation(global_logits)
 
-        start_logits = self.start_classifier(sequence_output) * global_logits
-        end_logits = self.end_classifier(sequence_output) * global_logits
+            start_logits = self.start_classifier(sequence_output) * global_logits
+            end_logits = self.end_classifier(sequence_output) * global_logits
+        else:
+            start_logits = self.start_classifier(sequence_output)
+            end_logits = self.end_classifier(sequence_output)
 
         outputs = ([start_logits, end_logits],) + outputs[2:]  # add hidden states and attention if they are here
         if start_labels is not None and end_labels is not None:

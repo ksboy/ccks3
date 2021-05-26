@@ -39,7 +39,7 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenBinaryClassificationWithGate as AutoModelForTokenClassification
+from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
 from utils_ner_bin import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities
 from metrics import f1_score, precision_score, recall_score
@@ -567,6 +567,10 @@ def main():
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     parser.add_argument("--add_event_type_to_role", action="store_true", help="")
+
+    # model config
+    parser.add_argument("--with_gate", type=bool, default=True, help="")
+
     args = parser.parse_args()
 
     if (
@@ -639,6 +643,11 @@ def main():
         label2id={label: i for i, label in enumerate(labels)},
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
+    our_config = {
+        "with_gate": args.with_gate
+    }
+    config.update(our_config)
+
     tokenizer_args = {k: v for k, v in vars(args).items() if v is not None and k in TOKENIZER_ARGS}
     logger.info("Tokenizer arguments: %s", tokenizer_args)
     tokenizer = AutoTokenizer.from_pretrained(
