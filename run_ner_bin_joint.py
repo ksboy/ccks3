@@ -42,7 +42,7 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassificationJoint as AutoModelForTokenClassification
 from utils import get_labels, write_file, OurBertTokenizer
-from utils_bi_ner_joint import convert_examples_to_features, read_examples_from_file
+from utils_ner_bin_joint import convert_examples_to_features, read_examples_from_file
 from utils_ner_bin import convert_label_ids_to_onehot, get_entities
 from metrics import compute_metric
 try:
