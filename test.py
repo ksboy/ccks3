@@ -50,5 +50,8 @@
 
 import torch.nn.utils
 
-path = "./output/lic/role_bin2_with_gate_sujianlin_sigmoid/checkpoint-best/training_args.bin"
-print( torch.load(path) )
+# path = "./output/lic/role_bin2_with_gate_sujianlin_sigmoid/checkpoint-best/training_args.bin"
+path = "/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/pytorch_model.bin"
+print( torch.load(path).keys() )
+
+# 'bert.embeddings.word_embeddings.weight', 'bert.embeddings.position_embeddings.weight', 'bert.embeddings.token_type_embeddings.weight', 'bert.embeddings.LayerNorm.weight', 'bert.embeddings.LayerNorm.bias',

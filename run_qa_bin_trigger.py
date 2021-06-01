@@ -222,7 +222,6 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
                         if best_metric != 0: patience += 1
-                        patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)
                         print("Current Metric", current_metric)
@@ -396,9 +395,9 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
             dataset= args.dataset,
             task=args.task
         )
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s", cached_features_file)
-            torch.save(features, cached_features_file)
+        # if args.local_rank in [-1, 0]:
+            # logger.info("Saving features into cached file %s", cached_features_file)
+            # torch.save(features, cached_features_file)
 
     if args.local_rank == 0 and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache

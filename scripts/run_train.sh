@@ -1,17 +1,19 @@
 MAX_LENGTH=256
 DATASET=lic
-TASK=role
+TASK=trigger
 DOMAIN=trans
 MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
 # MODEL=./output/$DATASET/$DOMAIN/role_bin_whou_relu/checkpoint-best   # finetune
 DATA_DIR=./data/DuEE_1_0/
 SCHEMA=./data/DuEE_1_0/event_schema.json
-OUTPUT_DIR=./output/$DATASET/multi_task_whou_relu/
+OUTPUT_DIR=./output/$DATASET/joint/
 # DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
 # SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
-# OUTPUT_DIR=./output/$DATASET/$DOMAIN/multi_task_whou_relu/
+# OUTPUT_DIR=./output/$DATASET/$DOMAIN/joint4/
+# DATA_DIR=./data/ACE05/
+# SCHEMA=./data/ACE05/event_schema.json
+# OUTPUT_DIR=./output/$DATASET/role_qa/
 BATCH_SIZE=16
-# BATCH_SIZE = batch_size * num_gpus
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=45
 SAVE_STEPS=300 # 100
@@ -23,7 +25,7 @@ LR=3e-5
 mkdir -p $OUTPUT_DIR
 # CUDA_VISIBLE_DEVICES=0,1 nohup python -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_qa_bin_role.py \
 # CUDA_VISIBLE_DEVICES=0,1 nohup python -u -m torch.distributed.launch --nproc_per_node=2 run_qa_bin_role.py --local_rank 0 \
-CUDA_VISIBLE_DEVICES=1 nohup python -u run_ner_bin_multi_task.py \
+CUDA_VISIBLE_DEVICES=1 nohup python -u run_ner_bin_joint.py \
 --dataset $DATASET \
 --task $TASK \
 --model_type bert \

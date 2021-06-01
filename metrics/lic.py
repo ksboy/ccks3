@@ -1,5 +1,5 @@
 
-from metrics import _f1_score
+from .metrics import _f1_score
 def token_level_metric(label_list, preds_list):
     """
     统计所有论元字符级别的PRF值。首先需要计算每个论元的PRF,而且注意label_list的每行中可能包含多个论元需要单独计算
@@ -26,3 +26,44 @@ def token_level_metric(label_list, preds_list):
 
     return token_level_precision, token_level_recall, token_level_f1
 
+from .ccks3 import readjson
+def compute_metric2(truefile, predfile):
+    truemap = readjson(truefile)
+    predmap = readjson(predfile)
+    ids = list(predmap.keys())
+    for id in ids:
+        if id not in truemap:
+            predmap.pop(id)
+            print(id)
+    role_pred, role_true = [], []
+    trigger_pred, trigger_true = [], []
+    for id, item in predmap.items():
+        for event in item['events']:
+            event_type = event['type']
+            for mention in event['mentions']:
+                if mention['role'] == 'trigger':
+                    # mention['span'][1] = mention['span'][0] + len(mention['word'])
+                    trigger_pred.append([id] + mention['span'] + [event_type])
+                else:
+                    role_pred.append([id] + mention['span'] + [event_type + mention['role']])
+    
+    for id, item in truemap.items():
+        for event in item['event_list']:
+            event_type = event['event_type']
+            trigger = event['trigger']
+            trigger_start_index = event['trigger_start_index']
+            trigger_end_index = trigger_start_index + len(trigger)
+            trigger_true.append([id] + [trigger_start_index, trigger_end_index] + [event_type])
+            for argument in event['arguments']:
+                argument_start_index = argument['argument_start_index']
+                argument_end_index = argument_start_index + len(argument)
+                role_true.append([id] + [argument_start_index, argument_end_index] + [event_type + argument['role']])
+    
+    from .metrics import _precision_score, _recall_score, _f1_score
+    trigger_result = [ _precision_score(trigger_true, trigger_pred), \
+        _recall_score(trigger_true, trigger_pred), _f1_score(trigger_true, trigger_pred) ]
+
+    role_result = [ _precision_score(role_true, role_pred), \
+        _recall_score(role_true, role_pred), _f1_score(role_true, role_pred) ]
+    print(trigger_result, role_result)
+    return trigger_result, role_result

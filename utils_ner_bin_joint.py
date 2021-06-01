@@ -194,9 +194,9 @@ class InputFeatures(object):
 def read_examples_from_file(data_dir, mode, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        items = data_process_bin_ccks(file_path, add_event_type_to_role=True, is_predict= mode!='train')
+        items = data_process_bin_ccks(file_path, add_event_type_to_role=False, is_predict= mode!='train')
     elif dataset=="lic":
-        items = data_process_bin_lic(file_path, add_event_type_to_role=True, is_predict= mode!='train')
+        items = data_process_bin_lic(file_path, add_event_type_to_role=False, is_predict= mode!='train')
     return [InputExample(**item) for item in items]
 
 def convert_examples_to_features(

@@ -44,7 +44,8 @@ from model import BertForTokenBinaryClassificationJoint as AutoModelForTokenClas
 from utils import get_labels, write_file, OurBertTokenizer
 from utils_ner_bin_joint import convert_examples_to_features, read_examples_from_file
 from utils_ner_bin import convert_label_ids_to_onehot, get_entities
-from metrics import compute_metric
+from metrics.ccks3 import compute_metric
+from metrics.lic import compute_metric2
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
@@ -223,8 +224,7 @@ def train(args, train_dataset, model, tokenizer, eval_tokenizer, trigger_labels,
 
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
-                        if best_metric != 0: patience += 1
-                        patience += 1
+                        if current_metric != 0: patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)
                         print("Current Metric", current_metric)
@@ -299,7 +299,8 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
             if not row or row == '\n': continue
             data = json.loads(row)
             data["events"] = []
-            text = data['content']
+            if 'content' in data: text = data['content']
+            elif 'text' in data: text = data['text']
             tokens = tokenizer.tokenize(text)
 
             token_ids = tokenizer.convert_tokens_to_ids(tokens)
@@ -315,8 +316,8 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
                 trigger_end_index -= 1 
                 trigger = text[trigger_start_index: trigger_end_index+1]
                 event_type = trigger_labels[event_type_id]
-                target_role_labels = get_labels(args.schema, task="role", mode="classification", target_event_type=event_type)
-                arguments = [{"role": "trigger","span":[trigger_start_index, trigger_start_index+1], "word": trigger}]
+                target_role_labels = get_labels(args.schema, task="role", mode="classification", target_event_type=event_type, add_event_type_to_role=False)
+                arguments = [{"role": "trigger","span":[trigger_start_index, trigger_end_index+1], "word": trigger}]
                 for role_data in role_data_list:
                     _, argument_start_index, argument_end_index, role_id = role_data
                     argument_start_index -= 1
@@ -341,8 +342,15 @@ def evaluate(args, model, tokenizer, trigger_labels, role_labels, mode, prefix="
         os.path.join(output_dir, "test_predictions.json")
     write_file(results, eval_predictions_file) 
 
+    trigger_result, role_result = compute_metric2(file_path, eval_predictions_file)
     results = {
-        "f1":  compute_metric(file_path, eval_predictions_file),
+        "f1": 0.5 * (trigger_result[2] + role_result[2]),
+        "trigger_precision": trigger_result[0],
+        "trigger_recall": trigger_result[1],
+        "trigger_f1": trigger_result[2],
+        "role_precision": role_result[0],
+        "role_recall": role_result[1],
+        "role_f1": role_result[2],
     }
 
     logger.info("***** Eval results %s *****", prefix)
@@ -624,7 +632,7 @@ def main():
     # Prepare CONLL-2003 task
     trigger_labels = get_labels(args.schema, task="trigger", mode="classification")
     num_trigger_labels = len(trigger_labels)
-    role_labels = get_labels(args.schema, task="role", mode="classification")
+    role_labels = get_labels(args.schema, task="role", mode="classification", add_event_type_to_role=False)
     num_role_labels = len(role_labels)
     # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
     pad_token_label_id = -100

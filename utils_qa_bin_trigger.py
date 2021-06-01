@@ -127,6 +127,10 @@ def get_query_templates(dataset, task):
         ['触', '发', '词'], # 2 trigger
         ['动', '词'], # 3 verb
         [], # 4 null
+        ['[unused2]', '[unused3]', '[unused4]'], # 5
+        ['[unused2]', '[unused3]'], # 6
+        ['动', '词', '是', '什', '么', '？'], # 3 verb
+        
     ]
 
     if task == "trigger":

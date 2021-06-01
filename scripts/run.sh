@@ -1,15 +1,15 @@
 MAX_LENGTH=256
-DATASET=lic
+DATASET=ccks
 TASK=role
-DOMAIN=trans
+DOMAIN=few
 MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
 # MODEL=./output/trigger_base/0/  finetune
-DATA_DIR=./data/DuEE_1_0/
-SCHEMA=./data/DuEE_1_0/event_schema.json
-OUTPUT_DIR=./output/temp/
-# DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/0/
-# SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
-# OUTPUT_DIR=./output/$DATASET/$DOMAIN/joint3/0/
+# DATA_DIR=./data/DuEE_1_0/
+# SCHEMA=./data/DuEE_1_0/event_schema.json
+# OUTPUT_DIR=./output/$DATASET/trigger_qa/query_3/
+DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
+SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
+OUTPUT_DIR=./output/$DATASET/$DOMAIN/joint3/0/
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=1000000000
@@ -22,7 +22,7 @@ LR=3e-5
 mkdir -p $OUTPUT_DIR
 # CUDA_VISIBLE_DEVICES=0 python3 run_ner_bio_pl.py \
 # CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_ner_bio_pl.py \
-python3 run_ner_bin.py \
+CUDA_VISIBLE_DEVICES=0 nohup python3 -u run_qa_bin_trigger.py \
 --dataset $DATASET \
 --task $TASK \
 --model_type bert \
@@ -42,7 +42,7 @@ python3 run_ner_bin.py \
 --save_steps $SAVE_STEPS \
 --logging_steps $SAVE_STEPS \
 --num_train_epochs $NUM_EPOCHS \
---early_stop 10000000 \
+--early_stop 3 \
 --learning_rate $LR \
 --weight_decay 0 \
 --warmup_steps $WARMUP_STEPS \

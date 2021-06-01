@@ -39,7 +39,8 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
+# from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
+from model import BertForTokenBinaryClassificationWithGate as AutoModelForTokenClassification
 from utils import get_labels, write_file
 from utils_ner_bin import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities
 from metrics import f1_score, precision_score, recall_score
@@ -221,7 +222,6 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                     current_metric = results["f1"]
                     if current_metric <= best_metric:
                         if best_metric != 0: patience += 1
-                        patience += 1
                         print("=" * 80)
                         print("Best Metric", best_metric)
                         print("Current Metric", current_metric)
@@ -569,7 +569,7 @@ def main():
     parser.add_argument("--add_event_type_to_role", action="store_true", help="")
 
     # model config
-    parser.add_argument("--with_gate", type=bool, default=True, help="")
+    parser.add_argument("--with_gate", type=bool, default=False, help="")
 
     args = parser.parse_args()
 

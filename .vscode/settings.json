@@ -1,3 +1,3 @@
 {
-    "python.pythonPath": "/usr/local/miniconda3/envs/transformers/bin/python"
+    "python.pythonPath": "/home/whou/.conda/envs/transformers/bin/python"
 }

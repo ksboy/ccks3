@@ -137,6 +137,52 @@ def role_process_bin_lic(input_file, schema_file, is_predict=False):
                     "start_labels":start_labels, "end_labels":end_labels})
     return results
 
+## ace格式
+def role_process_bin_ace(input_file, schema_file, is_predict=False):
+    role_dict = {}
+    rows = open(schema_file, encoding='utf-8').read().splitlines()
+    for row in rows:
+        row = json.loads(row)
+        event_type = row['event_type']
+        role_dict[event_type] = []
+        for role in row["role_list"]:
+            role_dict[event_type].append(role["role"])
+    
+    results = []
+    count = 0
+    file = open(input_file,'r',encoding='utf-8')
+    rows = json.load(file)
+    for row in rows:
+        count += 1
+        if "id" not in row:
+            row["id"]=count
+        # arguments = []
+        if is_predict:
+            results.append({"id":row["id"], "words":list(row["words"]), "start_labels":start_labels, "end_labels":end_labels})
+            continue
+        entities = row['entities']
+        for event in row["event-mentions"]:
+            event_type = event["event_type"]
+            for gold_role in role_dict[event_type]:
+                start_labels = [0]*len(row["words"]) 
+                end_labels = [0]*len(row["words"])
+                for i, role in enumerate(event["arguments"]):
+                    if role!=gold_role: continue
+                    entity = entities[i]
+                    # argument = entity['text']
+                    # if entity['text'] != entity['head']["text"]:
+                    #     print(entity['text'], '\n', entity['head']["text"])
+                    # assert entity['text'] == entity['head']["text"]
+                    argument_start_index = entity['head']["start"]
+                    argument_end_index = entity['head']["end"] - 1
+                    start_labels[argument_start_index] = 1
+                    end_labels[argument_end_index] = 1 
+
+                results.append({"id":row["id"], "words":list(row["words"]), "event_type":event_type, "role":gold_role, \
+                    "start_labels":start_labels, "end_labels":end_labels})
+    return results
+
+
 def read_examples_from_file(data_dir, schema_file, mode, task, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
@@ -145,6 +191,8 @@ def read_examples_from_file(data_dir, schema_file, mode, task, dataset="ccks"):
     elif dataset=="lic":
         # if task=='trigger': items = trigger_process_bin_lic(file_path)
         if task=='role': items = role_process_bin_lic(file_path, schema_file,)
+    elif dataset=="ace":
+        if task=='role': items = role_process_bin_ace(file_path, schema_file,)
     return [InputExample(**item) for item in items]
 
 def get_query_templates(query_file):
@@ -277,7 +325,8 @@ def convert_examples_to_features(
             if len(word_tokens)>1: 
                 print(word,">1") 
                 tokens.extend(word_tokens[:1])
-                pass
+                # tokens.extend(word_tokens)
+                # label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
             if len(word_tokens)<1: 
                 # print(word,"<1") 基本都是空格
                 tokens.extend(["[unused1]"])

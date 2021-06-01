@@ -184,10 +184,59 @@ def compute_metric(truefile,predfile):
     return f1score
 
 
+def compute_metric2(truefile, predfile):
+    truemap = readjson(truefile)
+    predmap = readjson(predfile)
+    ids = list(predmap.keys())
+    for id in ids:
+        if id not in truemap:
+            predmap.pop(id)
+            print(id)
+    role_pred, role_true = [], []
+    trigger_pred, trigger_true = [], []
+    for id, item in predmap.items():
+        for event in item['events']:
+            event_type = event['type']
+            for mention in event['mentions']:
+                if mention['role'] == 'trigger':
+                    mention['span'][1] = mention['span'][0] + len(mention['word'])
+                    trigger_pred.append([id] + mention['span'] + [event_type])
+                else:
+                    role_pred.append([id] + mention['span'] + [event_type + mention['role']])
+    
+    for id, item in truemap.items():
+        for event in item['events']:
+            event_type = event['type']
+            for mention in event['mentions']:
+                if mention['role'] == 'trigger':
+                    trigger_true.append([id] + mention['span'] + [event_type])
+                else:
+                    role_true.append([id] + mention['span'] + [event_type + mention['role']])
+    
+    from metrics import _precision_score, _recall_score, _f1_score
+    trigger_result = [ _precision_score(trigger_true, trigger_pred), \
+        _recall_score(trigger_true, trigger_pred), _f1_score(trigger_true, trigger_pred) ]
+
+    role_result = [ _precision_score(role_true, role_pred), \
+        _recall_score(role_true, role_pred), _f1_score(role_true, role_pred) ]
+    print(trigger_result, role_result)
+    return trigger_result, role_result
+
+
+# def convert(input_file, outpu_file):
+#     with open(input_file, "r", encoding="utf-8") as fw:
+#         for i in fw.readlines():
+#             linemap = json.loads(i)
+#             for event in linemap['events']:
+#                 event['']
+#             results.append(linemap)
+
+
+
 if __name__ == "__main__":
-    truefile = "./data/FewFC-main/original/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
+    truefile = "./data/FewFC-main/rearranged/test_trans.json"  # lhj-2361-2446mtest350dev0331_new
     # noisedfile = "noised.json"
     # predfile = "./result/test_trans_bin.json"
-    predfile = "./output/ccks/bin_multi_task/0/checkpoint-best/test_predictions.json"
-    metric = compute_metric(truefile, predfile)
+    predfile = "./output/ccks/trans/joint4/checkpoint-best/eval_predictions.json"
+    metric = compute_metric2(truefile, predfile)
     print(metric)
