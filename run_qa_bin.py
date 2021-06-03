@@ -41,7 +41,7 @@ from transformers import (
 )
 from model import BertForTokenBinaryClassification as AutoModelForTokenClassification
 from utils import get_labels, write_file
-from utils_qa_bin_role import read_examples_from_file, convert_examples_to_features
+from utils_qa_bin import read_examples_from_file, convert_examples_to_features
 from utils_ner_bin import get_entities
 from metrics import f1_score, precision_score, recall_score
 
@@ -396,8 +396,9 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
             task=args.task
         )
         if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s", cached_features_file)
-            torch.save(features, cached_features_file)
+            pass
+            # logger.info("Saving features into cached file %s", cached_features_file)
+            # torch.save(features, cached_features_file)
 
     if args.local_rank == 0 and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
