@@ -140,7 +140,6 @@ def data_val(input_file):
                     role_flag = True
                     if role!= arg_start_index_map[argument_start_index]:
                         arg_role_flag = True
-                        if len(row["event_list"])>1: print(row)
                     else:
                         pass
                         # print(row)
@@ -161,6 +160,9 @@ def data_val(input_file):
             arg_count2 += 1
             # print(row)
         if arg_role_flag:
+            if len(row["event_list"])>1 and not any(event['event_type'] in ["收购", "股份股权转让"] for event in row["event_list"]) \
+                    and len(set(event['event_type'] for event in row["event_list"])) > 1: 
+                print(row)
             arg_role_count += 1
         if arg_role_one_event_flag:
             arg_role_one_event_count += 1

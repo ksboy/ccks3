@@ -213,7 +213,7 @@ def compute_metric2(truefile, predfile):
                 else:
                     role_true.append([id] + mention['span'] + [event_type + mention['role']])
     
-    from metrics import _precision_score, _recall_score, _f1_score
+    from .metrics import _precision_score, _recall_score, _f1_score
     trigger_result = [ _precision_score(trigger_true, trigger_pred), \
         _recall_score(trigger_true, trigger_pred), _f1_score(trigger_true, trigger_pred) ]
 

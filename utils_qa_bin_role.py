@@ -195,30 +195,6 @@ def read_examples_from_file(data_dir, schema_file, mode, task, dataset="ccks"):
         if task=='role': items = role_process_bin_ace(file_path, schema_file,)
     return [InputExample(**item) for item in items]
 
-def get_query_templates(query_file):
-    """Load query templates"""
-    query_templates = dict()
-    with open(query_file, "r", encoding='utf-8') as f:
-        next(f)
-        for line in f:
-            event_type, role, role_chinese, description, role_type = line.strip().split(",")
-            if event_type not in query_templates:
-                query_templates[event_type] = dict()
-            if role not in query_templates[event_type]:
-                query_templates[event_type][role] = list()
-
-            # 0 
-            query_templates[event_type][role].append(role_chinese)
-            # 1
-            query_templates[event_type][role].append(event_type + " "+ role_chinese)
-            # 2 
-            query_templates[event_type][role].append(role+ " "+ description)
-            # 3 
-            query_templates[event_type][role].append(event_type + " " + role+ " "+ description)
-            
-            # query_templates[event_type][role].append(role + " in [trigger]")
-            # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
-    return query_templates
 
 def get_query_templates(dataset, task):
     """Load query templates"""
@@ -246,6 +222,10 @@ def get_query_templates(dataset, task):
             query_templates[event_type][role].append(role_chinese+ " "+ description)
             # 3 
             query_templates[event_type][role].append(event_type + " " + role_chinese+ " "+ description)
+            # 4 
+            query_templates[event_type][role].append(event_type + "中的" + role_chinese+ " "+ description+ " 是什么？")
+            # 5 
+            query_templates[event_type][role].append(["[unused2]", "[unused3]"] +list(event_type) + ["[unused4]", "[unused5]"] + list(role_chinese)+ ["[unused6]", "[unused7]"]+ list(description) + ["[unused8]", "[unused9]"])
             
             # query_templates[event_type][role].append(role + " in [trigger]")
             # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
@@ -268,7 +248,7 @@ def convert_examples_to_features(
     sequence_a_segment_id=0,
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
-    nth_query=3,
+    nth_query=5,
     dataset='ccks',
     task='trigger'
 ):
@@ -297,7 +277,10 @@ def convert_examples_to_features(
 
         for i in range(len(query)):
             word = query[i]
-            word_tokens = tokenizer.tokenize(word)
+            if 'unused' in word:
+                word_tokens = [word]
+            else:
+                word_tokens = tokenizer.tokenize(word)
             if len(word_tokens)==1:
                 tokens.extend(word_tokens)
             if len(word_tokens)>1: 

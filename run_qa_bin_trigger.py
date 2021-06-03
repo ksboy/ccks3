@@ -81,7 +81,10 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
         args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-
+    
+    # 只优化部分参数
+    # model.bert.embeddings.word_embeddings.weight[1:9].requires_grad = False
+    
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -194,6 +197,12 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                     scaled_loss.backward()
             else:
                 loss.backward()
+            
+            # # 只优化部分参数
+            # mask = torch.zeros(model.bert.embeddings.word_embeddings.weight.shape[0]).long()
+            # mask[1:9]=1
+            # # mask = torch.masked_select(mask, mask==0)
+            # model.bert.embeddings.word_embeddings.weight.grad[~ mask.bool()] = 0
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:

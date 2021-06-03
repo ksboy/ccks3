@@ -127,10 +127,9 @@ def get_query_templates(dataset, task):
         ['触', '发', '词'], # 2 trigger
         ['动', '词'], # 3 verb
         [], # 4 null
-        ['[unused2]', '[unused3]', '[unused4]'], # 5
+        ['[unused2]', '[unused3]', '[unused4]', '[unused5]','[unused6]','[unused7]','[unused8]'], # 5
         ['[unused2]', '[unused3]'], # 6
-        ['动', '词', '是', '什', '么', '？'], # 3 verb
-        
+        ['这', '句', '话', '中', ' 的', '动', '词', '是', '什', '么', '？'], # 7 verb
     ]
 
     if task == "trigger":
@@ -159,7 +158,7 @@ def convert_examples_to_features(
     sequence_a_segment_id=0,
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
-    nth_query=3,
+    nth_query=5,
     dataset='ccks',
     task='trigger'
 ):
@@ -189,7 +188,10 @@ def convert_examples_to_features(
         query = query_templates[nth_query]
         for i in range(len(query)):
             word = query[i]
-            word_tokens = tokenizer.tokenize(word)
+            if 'unused' in word:
+                word_tokens = [word]
+            else:
+                word_tokens = tokenizer.tokenize(word)
             if len(word_tokens)==1:
                 tokens.extend(word_tokens)
             if len(word_tokens)>1: 

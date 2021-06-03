@@ -45,7 +45,8 @@ from utils import get_labels, write_file, OurBertTokenizer
 from utils_ner_bin_joint import convert_examples_to_features, read_examples_from_file
 from utils_ner_bin import convert_label_ids_to_onehot, get_entities
 from metrics.ccks3 import compute_metric
-from metrics.lic import compute_metric2
+from metrics.ccks3 import compute_metric2
+# from metrics.lic import compute_metric2
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
@@ -667,10 +668,22 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
         **tokenizer_args,
     )
+    if os.path.exists(os.path.join(args.model_name_or_path, "pytorch_model.bin")):
+        unexpected_keys = ['role_start_classifier.weight', 'role_start_classifier.bias', 'role_end_classifier.weight', 'role_end_classifier.bias', \
+            'trigger_start_classifier.weight', 'trigger_start_classifier.bias', 'trigger_end_classifier.weight', 'trigger_end_classifier.bias']
+        state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
+        # for key in state_dict.keys():
+        #     print(key)
+        for key in unexpected_keys:
+            state_dict.pop(key, None)
+    else:
+        state_dict = None
+
     model = AutoModelForTokenClassification.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
         config=config,
+        state_dict = state_dict,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
 

@@ -257,7 +257,7 @@ class BertForTokenBinaryClassificationJoint(BertPreTrainedModel):
         # add trigger embedding
         batch_size, sequence_length, hidden_size = sequence_output.shape
         mask = token_type_ids.unsqueeze(-1).expand_as(sequence_output).bool()
-        trigger_embedding = torch.sum(sequence_output * mask, dim=1) / torch.sum(mask, dim=1)
+        trigger_embedding = torch.sum(sequence_output * mask, dim=1) / (torch.sum(mask, dim=1)+ 1e-8)
         context_embedding = sequence_output + trigger_embedding.unsqueeze(1)
         
         # sequence_output_role = self.dropout(sequence_output)
