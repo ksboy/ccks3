@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id, words, event_type, role, start_labels, end_labels):
+    def __init__(self, id, words, start_labels, end_labels, event_type=None, role=None):
         """Constructs a InputExample.
 
         Args:
@@ -52,6 +52,78 @@ class InputFeatures(object):
         self.token_type_ids = token_type_ids
         self.start_label_ids = start_label_ids
         self.end_label_ids = end_label_ids
+
+
+## ccks格式
+def trigger_process_bin_ccks(input_file, schema_file, is_predict=False):
+    event_type_list = []
+    rows = open(schema_file, encoding='utf-8').read().splitlines()
+    for row in rows:
+        row = json.loads(row)
+        event_type = row['event_type']
+        event_type_list.append(event_type)
+
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        start_labels = [0]*len(row["content"])
+        end_labels = [0]*len(row["content"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels, "event_type":None})
+            continue
+        for gold_event_type in event_type_list:
+            start_labels = [0]*len(row["content"])
+            end_labels = [0]*len(row["content"])
+            for event in row["events"]:
+                event_type = event["type"]
+                if event_type != gold_event_type: continue
+                for mention in event["mentions"]:
+                    if mention["role"]=="trigger":
+                        trigger = mention["word"]
+                        trigger_start_index, trigger_end_index = mention["span"]
+                        trigger_end_index -= 1
+                        start_labels[trigger_start_index]= 1
+                        end_labels[trigger_end_index]= 1
+                        break
+            results.append({"id":row["id"], "words":list(row["content"]),  "start_labels":start_labels, "end_labels":end_labels, "event_type":gold_event_type})
+    # write_file(results,output_file)
+    return results
+
+## lic格式
+def trigger_process_bin_lic(input_file, schema_file, is_predict=False):
+    event_type_list = []
+    rows = open(schema_file, encoding='utf-8').read().splitlines()
+    for row in rows:
+        row = json.loads(row)
+        event_type = row['event_type']
+        event_type_list.append(event_type)
+
+    rows = open(input_file, encoding='utf-8').read().splitlines()
+    results = []
+    for row in rows:
+        if len(row)==1: print(row)
+        row = json.loads(row)
+        start_labels = [0]*len(row["text"])
+        end_labels = [0]*len(row["text"])
+        if is_predict: 
+            results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels, "event_type":None})
+            continue
+        for gold_event_type in event_type_list:
+            start_labels = [0]*len(row["content"])
+            end_labels = [0]*len(row["content"])
+            for event in row["event_list"]:
+                trigger = event["trigger"]
+                event_type = event["event_type"]
+                if event_type != gold_event_type: continue
+                trigger_start_index = event["trigger_start_index"]
+                trigger_end_index = trigger_start_index + len(trigger) - 1
+                start_labels[trigger_start_index]= 1
+                end_labels[trigger_end_index]= 1
+            results.append({"id":row["id"], "words":list(row["text"]),  "start_labels":start_labels, "end_labels":end_labels, "event_type":gold_event_type})
+    # write_file(results,output_file)
+    return results
 
 ## ccks格式
 def role_process_bin_ccks(input_file, schema_file, is_predict=False):
@@ -186,43 +258,45 @@ def role_process_bin_ace(input_file, schema_file, is_predict=False):
 def read_examples_from_file(data_dir, schema_file, mode, task, dataset="ccks"):
     file_path = os.path.join(data_dir, "{}.json".format(mode))
     if dataset=="ccks":
-        # if task=='trigger': items = trigger_process_bin_ccks(file_path)
+        if task=='trigger': items = trigger_process_bin_ccks(file_path, schema_file,)
         if task=='role': items = role_process_bin_ccks(file_path, schema_file,)
     elif dataset=="lic":
-        # if task=='trigger': items = trigger_process_bin_lic(file_path)
+        if task=='trigger': items = trigger_process_bin_lic(file_path, schema_file,)
         if task=='role': items = role_process_bin_lic(file_path, schema_file,)
     elif dataset=="ace":
         if task=='role': items = role_process_bin_ace(file_path, schema_file,)
     return [InputExample(**item) for item in items]
 
-def get_query_templates(query_file):
-    """Load query templates"""
+def get_query_templates_trigger(dataset):
+    query_file = "./query_template/trigger/"+dataset+".csv"
     query_templates = dict()
     with open(query_file, "r", encoding='utf-8') as f:
         next(f)
         for line in f:
-            event_type, role, role_chinese, description, role_type = line.strip().split(",")
+            if dataset == "ccks":
+                event_type, description = line.strip().split(",")
+            elif dataset == 'lic':
+                event_type, description = line.strip().split(",")
+
             if event_type not in query_templates:
-                query_templates[event_type] = dict()
-            if role not in query_templates[event_type]:
-                query_templates[event_type][role] = list()
+                query_templates[event_type] = list()
 
             # 0 
-            query_templates[event_type][role].append(role_chinese)
+            query_templates[event_type].append(event_type)
             # 1
-            query_templates[event_type][role].append(event_type + " "+ role_chinese)
+            query_templates[event_type].append(event_type + " "+ description)
             # 2 
-            query_templates[event_type][role].append(role+ " "+ description)
+            query_templates[event_type].append(event_type+ "（" + description + "）" + "的触发词是什么")
             # 3 
-            query_templates[event_type][role].append(event_type + " " + role+ " "+ description)
+            query_templates[event_type].append(event_type + " " + description+ " "+ description)
             
             # query_templates[event_type][role].append(role + " in [trigger]")
             # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
     return query_templates
-
-def get_query_templates(dataset, task):
+    
+def get_query_templates_role(dataset):
     """Load query templates"""
-    query_file = "./query_template/"+dataset+".csv"
+    query_file = "./query_template/role/"+dataset+".csv"
     query_templates = dict()
     with open(query_file, "r", encoding='utf-8') as f:
         next(f)
@@ -246,11 +320,19 @@ def get_query_templates(dataset, task):
             query_templates[event_type][role].append(role_chinese+ " "+ description)
             # 3 
             query_templates[event_type][role].append(event_type + " " + role_chinese+ " "+ description)
+            # 4 
+            query_templates[event_type][role].append(event_type + "中的" + role_chinese+ " "+ description+ " 是什么？")
+            # 5 
+            query_templates[event_type][role].append(event_type + "" + role_chinese+ " "+ description)
             
             # query_templates[event_type][role].append(role + " in [trigger]")
             # query_templates[event_type][role].append(query[:-1] + " in [trigger]?")
     return query_templates
     
+def get_query_templates(dataset, task):
+    if task=='role': return get_query_templates_role(dataset)
+    elif task=="trigger": return get_query_templates_trigger(dataset)
+
 def convert_examples_to_features(
     examples,
     label_list,
@@ -268,7 +350,7 @@ def convert_examples_to_features(
     sequence_a_segment_id=0,
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
-    nth_query=3,
+    nth_query=1,
     dataset='ccks',
     task='trigger'
 ):
@@ -292,12 +374,19 @@ def convert_examples_to_features(
         token_type_ids = []
         
         # query
-        event_type, role = example.event_type, example.role
-        query = query_templates[event_type][role][nth_query]
+        if task=='role':
+            event_type, role = example.event_type, example.role
+            query = query_templates[event_type][role][nth_query]
+        elif task=='trigger':
+            event_type = example.event_type
+            query = query_templates[event_type][nth_query]
 
         for i in range(len(query)):
             word = query[i]
-            word_tokens = tokenizer.tokenize(word)
+            if 'unused' in word:
+                word_tokens = [word]
+            else:
+                word_tokens = tokenizer.tokenize(word)
             if len(word_tokens)==1:
                 tokens.extend(word_tokens)
             if len(word_tokens)>1: 
