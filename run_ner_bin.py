@@ -44,6 +44,11 @@ from model import BertForTokenBinaryClassificationWithGate as AutoModelForTokenC
 from utils import get_labels, write_file
 from utils_ner_bin import convert_examples_to_features, read_examples_from_file, convert_label_ids_to_onehot, get_entities
 from metrics import f1_score, precision_score, recall_score
+import sys
+sys.path.append('/hy-nas/workspace/code_repo/ner')
+from metrics import f1_score_identification, precision_score_identification, recall_score_identification, \
+    accuracy_score_entity_classification, accuracy_score_token_classification, \
+    f1_score_token_classification, precision_score_token_classification, recall_score_token_classification 
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -345,10 +350,24 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
 
     results = {
         "loss": eval_loss,
-        "precision":  precision_score(batch_out_label_list, batch_preds_list),
+        "precision": precision_score(batch_out_label_list, batch_preds_list),
         "recall": recall_score(batch_out_label_list, batch_preds_list),
-        "f1":  f1_score(batch_out_label_list, batch_preds_list),
+        "f1": f1_score(batch_out_label_list, batch_preds_list),
+        "precision_i": precision_score_identification(batch_out_label_list, batch_preds_list),
+        "recall_i": recall_score_identification(batch_out_label_list, batch_preds_list),
+        "f1_i": f1_score_identification(batch_out_label_list, batch_preds_list),
+        "precision_c": precision_score_token_classification(batch_out_label_list, batch_preds_list),
+        "recall_c": recall_score_token_classification(batch_out_label_list, batch_preds_list),
+        "f1_c": f1_score_token_classification(batch_out_label_list, batch_preds_list),
+        "accuracy_token_c": accuracy_score_token_classification(batch_out_label_list, batch_preds_list),
+        "accuracy_entity_c": accuracy_score_entity_classification(batch_out_label_list, batch_preds_list)
     }
+    # results = {
+    #     "loss": eval_loss,
+    #     "precision":  precision_score(batch_out_label_list, batch_preds_list),
+    #     "recall": recall_score(batch_out_label_list, batch_preds_list),
+    #     "f1":  f1_score(batch_out_label_list, batch_preds_list),
+    # }
 
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):

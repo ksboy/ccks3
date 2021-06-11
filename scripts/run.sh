@@ -1,15 +1,15 @@
 MAX_LENGTH=256
 DATASET=ccks
 TASK=role
-DOMAIN=trans
-MODEL=/home/whou/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
-# MODEL=./output/$DATASET/base/role_bin/checkpoint-best/  # finetune
+DOMAIN=base
+MODEL=/hy-nas/workspace/pretrained_models/chinese_bert_wwm_ext_pytorch/  #albert-xxlarge-v2/  #bert-large-uncased-wwm/
+# MODEL=./output/$DATASET/base/event_classify/checkpoint-best/  # finetune
 # DATA_DIR=./data/DuEE_1_0/
 # SCHEMA=./data/DuEE_1_0/event_schema.json
 # OUTPUT_DIR=./output/$DATASET/trigger_qa/query_3/
 DATA_DIR=./data/FewFC-main/rearranged/$DOMAIN/
 SCHEMA=./data/FewFC-main/event_schema/$DOMAIN.json
-OUTPUT_DIR=./output/$DATASET/$DOMAIN/role_qa/query_5/
+OUTPUT_DIR=./output/$DATASET/$DOMAIN/role/
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=64
 NUM_EPOCHS=1000000000
@@ -22,7 +22,7 @@ LR=3e-5
 mkdir -p $OUTPUT_DIR
 # CUDA_VISIBLE_DEVICES=0 python3 run_ner_bio_pl.py \
 # CUDA_VISIBLE_DEVICES=0 python3 -m debugpy --listen 0.0.0.0:8888 --wait-for-client ./run_ner_bio_pl.py \
-CUDA_VISIBLE_DEVICES=1 nohup python3 -u run_qa_bin_role.py \
+CUDA_VISIBLE_DEVICES=0 nohup python3 -u run_ner_bio.py \
 --dataset $DATASET \
 --task $TASK \
 --model_type bert \

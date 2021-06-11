@@ -149,6 +149,27 @@ def role_process_bin_ccks(input_file, schema_file, is_predict=False):
         if is_predict: 
             results.append({"id":row["id"], "words":list(row["content"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
+       
+        # for gold_event_type in role_dict.keys():
+        #     for gold_role in role_dict[gold_event_type]:
+        #         for event in row["events"]:
+        #             start_labels = [0]*len(row["content"]) 
+        #             end_labels = [0]*len(row["content"]) 
+        #             event_type = event["type"]
+        #             if event_type != gold_event_type: continue
+        #             for arg in event["mentions"]:
+        #                 role = arg['role']
+        #                 if role=="trigger": continue
+        #                 if role!=gold_role: continue
+        #                 argument_start_index, argument_end_index = arg["span"]
+        #                 argument_end_index -= 1
+        #                 start_labels[argument_start_index] = 1
+        #                 end_labels[argument_end_index] = 1 
+
+        #         results.append({"id":row["id"], "words":list(row["content"]), "event_type":gold_event_type, "role":gold_role, \
+        #             "start_labels":start_labels, "end_labels":end_labels})
+        
+        # 假设事件类型全部是对的
         for event in row["events"]:
             event_type = event["type"]
             for gold_role in role_dict[event_type]:
@@ -191,6 +212,8 @@ def role_process_bin_lic(input_file, schema_file, is_predict=False):
         if is_predict: 
             results.append({"id":row["id"], "words":list(row["text"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
+        
+        # # 假设事件类型全部是对的
         for event in row["event_list"]:
             event_type = event["event_type"]
             for gold_role in role_dict[event_type]:
@@ -233,6 +256,7 @@ def role_process_bin_ace(input_file, schema_file, is_predict=False):
             results.append({"id":row["id"], "words":list(row["words"]), "start_labels":start_labels, "end_labels":end_labels})
             continue
         entities = row['entities']
+        # # 假设事件类型全部是对的
         for event in row["event-mentions"]:
             event_type = event["event_type"]
             for gold_role in role_dict[event_type]:
@@ -286,7 +310,7 @@ def get_query_templates_trigger(dataset):
             # 1
             query_templates[event_type].append(event_type + " "+ description)
             # 2 
-            query_templates[event_type].append(event_type+ "（" + description + "）" + "的触发词是什么")
+            query_templates[event_type].append(event_type + "的触发词是什么？" + "（" + description + "）" )
             # 3 
             query_templates[event_type].append(event_type + " " + description+ " "+ description)
             
@@ -350,7 +374,7 @@ def convert_examples_to_features(
     sequence_a_segment_id=0,
     sequence_b_segment_id=1,
     mask_padding_with_zero=True,
-    nth_query=5,
+    nth_query=2,
     dataset='ccks',
     task='trigger'
 ):

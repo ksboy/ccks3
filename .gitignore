@@ -132,7 +132,7 @@ dmypy.json
 
 output/
 log/
-data/
+cached*
 result/
 runs/
 lightning_logs/

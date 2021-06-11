@@ -50,6 +50,7 @@ class BertCRFForTokenClassification(BertPreTrainedModel):
         if labels is not None:
             loss = -1. * self.crf(emissions=logits, tags=labels.long(), \
                 mask=attention_mask.byte(), reduction='mean')
+            print(logits)
             preds = self.crf.decode(emissions=logits, mask=attention_mask.byte())
             outputs = (loss,) + (logits,) +(preds,) + outputs[2:]  # add hidden states and attention if they are here
             # 判断 seq_length 是否一致
